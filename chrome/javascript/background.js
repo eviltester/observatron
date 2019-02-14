@@ -57,35 +57,47 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
 
 
 
+function zeropadDigits(padthis, padding){
+  return ("000000" + padthis).slice((-1 * padding));
+}
 
+function getFileName(filetype, extension){
 
+    var datePart = new Date();
+
+    var dateString = datePart.getFullYear() +
+                      "-" + zeropadDigits(datePart.getMonth()+1,2) +
+                      "-" + zeropadDigits(datePart.getDate(),2) +
+                      "-" + zeropadDigits(datePart.getHours(),2) + 
+                      "-" + zeropadDigits(datePart.getMinutes(),2) + 
+                      "-" + zeropadDigits(datePart.getSeconds(),2) +
+                      "-" + zeropadDigits(datePart.getMilliseconds(),3);
+
+    var folderpath = datePart.getFullYear() + "/" + 
+                    zeropadDigits(datePart.getMonth()+1,2) + "/" +
+                    zeropadDigits(datePart.getDate(),2) + "/";
+      
+
+    var downloadFileName =  filepath+folderpath+fileprefix+
+                            dateString+
+                            "-" + filetype + "." + extension;
+    
+    return downloadFileName;                            
+}
 
 
 function downloadMHTML(mhtmlData){
 
-  if(!engaged){
-    return;
-  }
+    if(!engaged){
+      return;
+    }
 
-      // resolution?
-
-      var datePart = new Date();
-
-      var dateString = datePart.toLocaleDateString().replace(new RegExp("(/|,| |:)", "g"),"-") 
-                      + "-" + datePart.getHours() + 
-                        "-" + datePart.getMinutes() + 
-                        "-" + datePart.getSeconds() +
-                        "-" + datePart.getMilliseconds();
-      
-      var filetype = "-mhtmldata-";
+    var downloadFileName = getFileName("mhtmldata", "mhtml");
 
       // convert blob to url found at https://bugzilla.mozilla.org/show_bug.cgi?format=default&id=1271345
-      console.log(mhtmlData);      
+      //console.log(mhtmlData);   
+
       var blobURL = window.URL.createObjectURL(mhtmlData);
-
-      var downloadFileName = filepath+fileprefix+dateString+filetype+".mhtml";
-
-
 
       chrome.downloads.download(
             {
@@ -104,43 +116,31 @@ var width, height;
 
 function downloadScreenshot(){
 
-  if(!engaged){
-    return;
-  }
+    if(!engaged){
+      return;
+    }
 
     chrome.tabs.captureVisibleTab(function(screenshotUrl) {
 
-      // resolution?
+        //https://stackoverflow.com/questions/6718256/how-do-you-use-chrome-tabs-getcurrent-to-get-the-page-object-in-a-chrome-extensi
+        chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
+          console.log(tabs[0]);
+          width = tabs[0].width;
+          height = tabs[0].height;
+        });
 
-      var datePart = new Date();
+        var dimensions = "-" + width + "x" + height;
 
-      var dateString = datePart.toLocaleDateString().replace(new RegExp("(/|,| |:)", "g"),"-") 
-                      + "-" + datePart.getHours() + 
-                        "-" + datePart.getMinutes() + 
-                        "-" + datePart.getSeconds() +
-                        "-" + datePart.getMilliseconds();
-      
-      var filetype = "-screenshot-";
-      
-      //https://stackoverflow.com/questions/6718256/how-do-you-use-chrome-tabs-getcurrent-to-get-the-page-object-in-a-chrome-extensi
-      chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
-        console.log(tabs[0]);
-        width = tabs[0].width;
-        height = tabs[0].height;
-      });
+        var downloadFileName = getFileName("screenshot"+dimensions, "jpg");
 
-      var dimensions = "-" + width + "x" + height;
-
-      var downloadFileName = filepath+fileprefix+dateString+filetype+dimensions+".jpg";
-
-      chrome.downloads.download(
-            {
-              url:screenshotUrl, 
-              filename: downloadFileName
-            },function(downloadId){
-          console.log(downloadFileName);
-          console.log("download begin, the download is:" + downloadFileName);
-      });
+        chrome.downloads.download(
+              {
+                url:screenshotUrl, 
+                filename: downloadFileName
+              },function(downloadId){
+            console.log(downloadFileName);
+            console.log("download begin, the download is:" + downloadFileName);
+        });
 
     });
 }
@@ -175,7 +175,7 @@ function configuredOnPageLoad(anObject){
     console.log(anObject);
 
     chrome.pageCapture.saveAsMHTML({tabId: anObject.tabId}, downloadMHTML);
-    // TODO: pass in the id of the newly opened tab
+    // TODO: pass in the id of the newly opened tab to get the screenshot
     downloadScreenshot();
   }
 }
