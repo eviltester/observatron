@@ -116,18 +116,21 @@ var width, height;
 
 function downloadScreenshot(){
 
-    if(!engaged){
-      return;
-    }
-
     chrome.tabs.captureVisibleTab(function(screenshotUrl) {
 
+        if(screenshotUrl==undefined){
+          return;
+        }
+
         //https://stackoverflow.com/questions/6718256/how-do-you-use-chrome-tabs-getcurrent-to-get-the-page-object-in-a-chrome-extensi
-        chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
-          console.log(tabs[0]);
+        // , active: true  not necessarily the active tab, just the current
+        chrome.tabs.query({ currentWindow: true}, function (tabs) {
+          //console.log(tabs);
           width = tabs[0].width;
           height = tabs[0].height;
         });
+
+        console.log(screenshotUrl);
 
         var dimensions = "-" + width + "x" + height;
 
@@ -135,11 +138,11 @@ function downloadScreenshot(){
 
         chrome.downloads.download(
               {
-                url:screenshotUrl, 
+                url: screenshotUrl, 
                 filename: downloadFileName
               },function(downloadId){
-            console.log(downloadFileName);
-            console.log("download begin, the download is:" + downloadFileName);
+            console.log("download as " + downloadFileName);
+            
         });
 
     });
@@ -152,13 +155,18 @@ function toggle_observatron_status(){
       // switch it off
       console.log("Observatron Disengaged");
       engaged = false;
+
       chrome.browserAction.setIcon({path:"icons/red.png"});
       chrome.browserAction.setTitle({title:"Engage The Observatron"});
+
     }else{
       // switch it on
       console.log("Observatron Engaged");
-      downloadScreenshot();
       engaged=true;
+
+      downloadScreenshot();
+      saveAsMhtml();
+      
       chrome.browserAction.setIcon({path:"icons/green.png"});
       chrome.browserAction.setTitle({title:"Disengage The Observatron"});
     }
@@ -170,14 +178,49 @@ function configuredOnPageLoad(anObject){
     return;
   }
 
+  if(anObject === undefined){
+    return;
+  }
+
   if(onPageLoad){
   
+    if(!anObject.hasOwnProperty('tabId')){
+      return;
+    }
+
     console.log(anObject);
 
-    chrome.pageCapture.saveAsMHTML({tabId: anObject.tabId}, downloadMHTML);
-    // TODO: pass in the id of the newly opened tab to get the screenshot
+    saveAsMhtml(anObject.tabId);
     downloadScreenshot();
+
   }
+}
+
+function saveAsMhtml(anId){
+
+  if(anId == undefined){
+    
+    getCurrentTab().then(function(tab){
+      chrome.pageCapture.saveAsMHTML({tabId: tab.id}, downloadMHTML);
+    });
+
+  }
+  else{
+
+    chrome.pageCapture.saveAsMHTML({tabId: anId}, downloadMHTML);
+  }
+  
+}
+
+// using promises https://stackoverflow.com/questions/10413911/how-to-get-the-currently-opened-tabs-url-in-my-page-action-popup
+function getCurrentTab(){
+  return new Promise(function(resolve, reject){
+    chrome.tabs.query(
+      { currentWindow: true, active: true}
+      , function(tabs) {
+      resolve(tabs[0]);
+    });
+  });
 }
 
 
@@ -189,8 +232,8 @@ function configuredOnPageUpdated(tabId, changeInfo, tab){
 
   if(onPageUpdated){
     if (changeInfo.status == 'complete') {
-      chrome.pageCapture.saveAsMHTML({tabId: tabId}, downloadMHTML);
-      // TODO: pass in the id of the newly opened tab
+
+      saveAsMhtml(tabId);
       downloadScreenshot(); 
 
     }
