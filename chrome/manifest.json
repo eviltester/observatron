@@ -1,0 +1,26 @@
+{
+  "name": "Test Observer - The Observatron",
+  "version": "0.1",
+  "description": "The Observatron observes things in the browser",
+  "background": {
+    "persistent": false,
+    "scripts": ["javascript/background.js"]
+  },
+  "browser_action": {
+    "default_icon": "icons/red.png",
+    "default_title": "Engage The Observatron"
+  },
+  "content_scripts": [
+    {
+      "js": ["javascript/screenshotter.js"],
+      "run_at": "document_start",
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "permissions": [
+    "activeTab","downloads","webNavigation", "pageCapture"
+  ],
+  "manifest_version": 2
+}
