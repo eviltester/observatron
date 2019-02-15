@@ -18,7 +18,11 @@
     }
   ],
   "permissions": [
-    "activeTab","downloads","webNavigation", "pageCapture"
+    "activeTab",
+    "downloads",
+    "webNavigation",
+    "pageCapture",
+    "<all_urls>"    
   ],
   "manifest_version": 2
 }
