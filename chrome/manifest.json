@@ -22,7 +22,8 @@
     "downloads",
     "webNavigation",
     "pageCapture",
-    "<all_urls>"    
+    "<all_urls>",
+    "storage"    
   ],
   "manifest_version": 2
 }

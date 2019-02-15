@@ -2,13 +2,24 @@
 
 var engaged = false;
 
-var filepath = "observatron/";
-var fileprefix = "obs_";
+var options = {
 
-var onScrollEvent = true;
-var onResizeEvent = true;
-var onPageLoad = true;
-var onPageUpdated = true;
+  // which events are we responding to
+  onScrollEvent: true,
+  onResizeEvent: true,
+  onPageLoad: true,
+  onPageUpdated: true,
+
+  // where are the files stored?
+  filepath: "observatron/",
+  fileprefix: "obs_",
+
+  // 
+  scrolling_timeout_milliseconds: 500,
+  resize_timeout_milliseconds: 500
+}
+
+
 
 // useful info
 //https://stackoverflow.com/questions/13141072/how-to-get-notified-on-window-resize-in-chrome-browser
@@ -25,13 +36,13 @@ function requested(request){
   }
 
   if (request.method === 'resize') {
-    if(onResizeEvent){
+    if(options.onResizeEvent){
       console.log("shot on resize");
       downloadScreenshot();
     }
   }
   if (request.method === 'scrolled') {
-    if(onScrollEvent === true){
+    if(options.onScrollEvent === true){
       console.log("shot on scrolled");
       downloadScreenshot();
     }
@@ -78,7 +89,9 @@ function getFileName(filetype, extension){
                     zeropadDigits(datePart.getDate(),2) + "/";
       
 
-    var downloadFileName =  filepath+folderpath+fileprefix+
+    var downloadFileName =  options.filepath+
+                            folderpath+
+                            options.fileprefix+
                             dateString+
                             "-" + filetype + "." + extension;
     
@@ -165,6 +178,7 @@ function downloadScreenshot(){
 
 
 function toggle_observatron_status(){
+
     if(engaged){
       // switch it off
       console.log("Observatron Disengaged");
@@ -177,6 +191,11 @@ function toggle_observatron_status(){
       // switch it on
       console.log("Observatron Engaged");
       engaged=true;
+
+      chrome.storage.local.set({observatron: 
+                                  {resize_timeout: options.resize_timeout_milliseconds,
+                                   scrolling_timeout: options.resize_timeout_milliseconds}
+                                });
 
       downloadScreenshot();
       saveAsMhtml();
@@ -196,7 +215,7 @@ function configuredOnPageLoad(anObject){
     return;
   }
 
-  if(onPageLoad){
+  if(options.onPageLoad){
   
     if(!anObject.hasOwnProperty('tabId')){
       return;
@@ -244,7 +263,7 @@ function configuredOnPageUpdated(tabId, changeInfo, tab){
     return;
   }
 
-  if(onPageUpdated){
+  if(options.onPageUpdated){
     if (changeInfo.status == 'complete') {
 
       saveAsMhtml(tabId);
