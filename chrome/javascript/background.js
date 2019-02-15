@@ -116,15 +116,28 @@ var width, height;
 
 function downloadScreenshot(){
 
+
+
+
     chrome.tabs.captureVisibleTab(function(screenshotUrl) {
 
         if(screenshotUrl==undefined){
+          console.log("screenshotUrl is undefined");
+            // https://stackoverflow.com/questions/28431505/unchecked-runtime-lasterror-when-using-chrome-api
+            if(chrome.runtime.lastError) {
+                    // Something went wrong
+                    console.warn("An error occurred in capture visible tab " + chrome.runtime.lastError.message);
+                    // Maybe explain that to the user too?
+                  } else {
+                    // No errors, you can use entry
+                  }
           return;
         }
 
+
         //https://stackoverflow.com/questions/6718256/how-do-you-use-chrome-tabs-getcurrent-to-get-the-page-object-in-a-chrome-extensi
         // , active: true  not necessarily the active tab, just the current
-        chrome.tabs.query({ currentWindow: true}, function (tabs) {
+        chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
           //console.log(tabs);
           width = tabs[0].width;
           height = tabs[0].height;
@@ -136,13 +149,14 @@ function downloadScreenshot(){
 
         var downloadFileName = getFileName("screenshot"+dimensions, "jpg");
 
+
         chrome.downloads.download(
               {
                 url: screenshotUrl, 
                 filename: downloadFileName
               },function(downloadId){
-            console.log("download as " + downloadFileName);
-            
+                console.log("downloaded as " + downloadFileName);
+
         });
 
     });
