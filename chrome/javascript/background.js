@@ -185,7 +185,7 @@ function downloadScreenshot(){
           height = tabs[0].height;
         });
 
-        console.log(screenshotUrl);
+        //console.log(screenshotUrl);
 
         var dimensions = "-" + width + "x" + height;
 
