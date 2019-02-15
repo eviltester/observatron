@@ -10,6 +10,7 @@
     "default_icon": "icons/red.png",
     "default_title": "Engage The Observatron"
   },
+  "options_page": "options/options_page.html",
   "content_scripts": [
     {
       "js": ["javascript/screenshotter.js"],

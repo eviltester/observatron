@@ -1,8 +1,8 @@
 
 
-var engaged = false;
-
 var options = {
+
+  engaged: false,
 
   // which events are we responding to
   onScrollEvent: true,
@@ -19,20 +19,34 @@ var options = {
   resize_timeout_milliseconds: 500
 }
 
+function changedOptions(){
+  chrome.storage.local.set({observatron: options});
+}
+
+changedOptions();
+
+// https://developer.chrome.com/extensions/storage
+chrome.storage.onChanged.addListener(function(changes, namespace) {
+  if(namespace === "local"){
+    if(changes.hasOwnProperty("observatron")){
+      options = changes["observatron"].newValue;
+      if(changes["observatron"].newValue.enabled != changes["observatron"].oldValue.enabled){
+        toggle_observatron_status();
+      }
+    }
+  }
+});
+
+
 
 
 // useful info
 //https://stackoverflow.com/questions/13141072/how-to-get-notified-on-window-resize-in-chrome-browser
 //https://github.com/NV/chrome-o-tile/blob/master/chrome/background.js
-
-
-
-
-
 function requested(request){
 
-  if(!engaged){
-    return;
+  if(!isObservatronEngaged()){
+    return false;
   }
 
   if (request.method === 'resize') {
@@ -47,11 +61,14 @@ function requested(request){
       downloadScreenshot();
     }
   }
+
+  return false;
+
 }
 
 chrome.runtime.onMessage.addListener(requested);
 
-// Listen for a click on the camera icon. On that click, take a screenshot.
+// Enable Disable on click
 chrome.browserAction.onClicked.addListener(function() {
   toggle_observatron_status();
 });
@@ -98,10 +115,13 @@ function getFileName(filetype, extension){
     return downloadFileName;                            
 }
 
+function isObservatronEngaged(){
+  return options.engaged;
+}
 
 function downloadMHTML(mhtmlData){
 
-    if(!engaged){
+    if(!isObservatronEngaged()){
       return;
     }
 
@@ -179,10 +199,12 @@ function downloadScreenshot(){
 
 function toggle_observatron_status(){
 
-    if(engaged){
+    if(isObservatronEngaged()){
       // switch it off
       console.log("Observatron Disengaged");
-      engaged = false;
+      options.engaged = false;
+
+      changedOptions();
 
       chrome.browserAction.setIcon({path:"icons/red.png"});
       chrome.browserAction.setTitle({title:"Engage The Observatron"});
@@ -190,9 +212,11 @@ function toggle_observatron_status(){
     }else{
       // switch it on
       console.log("Observatron Engaged");
-      engaged=true;
+      options.engaged=true;
 
-      chrome.storage.local.set({observatron: 
+      changedOptions();
+
+      chrome.storage.local.set({observatron_screenshotter: 
                                   {resize_timeout: options.resize_timeout_milliseconds,
                                    scrolling_timeout: options.resize_timeout_milliseconds}
                                 });
@@ -207,7 +231,7 @@ function toggle_observatron_status(){
 
 function configuredOnPageLoad(anObject){
 
-  if(!engaged){
+  if(!isObservatronEngaged()){
     return;
   }
 
@@ -259,7 +283,7 @@ function getCurrentTab(){
 
 function configuredOnPageUpdated(tabId, changeInfo, tab){
 
-  if(!engaged){
+  if(!isObservatronEngaged()){
     return;
   }
 

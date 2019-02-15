@@ -5,13 +5,13 @@ var scrolling = 0;
 var scrolling_timeout_milliseconds=300;
 var resize_timeout_milliseconds=300;
 
-chrome.storage.local.get(['observatron'], setObservatronDefaults);
+chrome.storage.local.get(['observatron_screenshotter'], setObservatronDefaults);
 
 
 function setObservatronDefaults(options){
   if(options){
-    scrolling_timeout_milliseconds = options.observatron.resize_timeout;
-    resize_timeout_milliseconds = options.observatron.scrolling_timeout;
+    scrolling_timeout_milliseconds = options.observatron_screenshotter.resize_timeout;
+    resize_timeout_milliseconds = options.observatron_screenshotter.scrolling_timeout;
     console.log("set defaults from observatron");
     console.log(options);
   }
