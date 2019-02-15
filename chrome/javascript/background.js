@@ -9,6 +9,7 @@ var options = {
   onResizeEvent: true,
   onPageLoad: true,
   onPageUpdated: true,
+  onDoubleClickShot: true,
 
   // where are the files stored?
   filepath: "observatron/",
@@ -55,6 +56,14 @@ function requested(request){
       downloadScreenshot();
     }
   }
+
+  if (request.method === 'screenshotdbl') {
+    if(options.onDoubleClickShot){
+      console.log("shot on doubleclick");
+      downloadScreenshot();
+    }
+  }
+
   if (request.method === 'scrolled') {
     if(options.onScrollEvent === true){
       console.log("shot on scrolled");

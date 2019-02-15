@@ -19,6 +19,7 @@ function setObservatronDefaults(setoptions){
         document.getElementById('onresize').checked = options.onResizeEvent;
         document.getElementById('onpageload').checked = options.onPageLoad;
         document.getElementById('onpageupdated').checked = options.onPageUpdated;
+        document.getElementById('ondoubleclick').checked = options.onDoubleClickShot;
         document.getElementById('filepath').value = options.filepath;
         document.getElementById('fileprefix').value = options.fileprefix;
         document.getElementById('scrolling_timeout').value = options.scrolling_timeout_milliseconds;
@@ -34,16 +35,21 @@ function save_options() {
     var isOnResize = document.getElementById('onresize').checked;
     var isOnPageload = document.getElementById('onpageload').checked;
     var isOnPageupdate = document.getElementById('onpageupdated').checked;
+    var isOnPageDoubleClick = document.getElementById('ondoubleclick').checked;
+    
     var filePath = document.getElementById('filepath').value;
     var fileprefix = document.getElementById('fileprefix').value;
     var scrollingtimeout = document.getElementById('scrolling_timeout').value;
     var resizetimeout = document.getElementById('resize_timeout').value;
+    
     
     //options.engaged = isEngaged;
     options.onResizeEvent = isOnResize;
     options.onScrollEvent=isOnScroll;
     options.onPageLoad = isOnPageload;
     options.onPageUpdated = isOnPageupdate;
+    options.onDoubleClickShot = isOnPageDoubleClick;
+
     options.filepath = filePath;
     if(!options.filepath){
       options.filepath = "";
@@ -95,6 +101,7 @@ function set_defaults_on_gui(){
   document.getElementById('onresize').checked = true;
   document.getElementById('onpageload').checked = true;
   document.getElementById('onpageupdated').checked = true;
+  document.getElementById('ondoubleclick').checked = true;
   document.getElementById('filepath').value = "observatron/";
   document.getElementById('fileprefix').value = "obs_";
   document.getElementById('scrolling_timeout').value = 500;

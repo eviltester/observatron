@@ -50,3 +50,12 @@ window.addEventListener('scroll', function(event) {
   }
 
 }, false);
+
+window.addEventListener('dblclick', function(event) {
+
+  if(chrome.runtime!=undefined){
+      chrome.runtime.sendMessage({method: 'screenshotdbl'});
+      console.log("screenshot sent from double click");
+  }
+
+}, false);
