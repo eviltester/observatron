@@ -100,7 +100,7 @@ function set_defaults_on_gui(){
   document.getElementById('onscroll').checked = true;
   document.getElementById('onresize').checked = true;
   document.getElementById('onpageload').checked = true;
-  document.getElementById('onpageupdated').checked = true;
+  document.getElementById('onpageupdated').checked = false;
   document.getElementById('ondoubleclick').checked = true;
   document.getElementById('filepath').value = "observatron/";
   document.getElementById('fileprefix').value = "obs_";

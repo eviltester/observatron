@@ -8,7 +8,7 @@ var options = {
   onScrollEvent: true,
   onResizeEvent: true,
   onPageLoad: true,
-  onPageUpdated: true,
+  onPageUpdated: false,
   onDoubleClickShot: true,
 
   // where are the files stored?
@@ -82,17 +82,11 @@ chrome.browserAction.onClicked.addListener(function() {
   toggle_observatron_status();
 });
 
-
-
-chrome.webNavigation.onCompleted.addListener(function(){
-  configuredOnPageLoad();
-});
+chrome.webNavigation.onCompleted.addListener(configuredOnPageLoad);
 
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
   configuredOnPageUpdated(tabId, changeInfo, tab);
 });
-
-
 
 function zeropadDigits(padthis, padding){
   return ("000000" + padthis).slice((-1 * padding));
@@ -128,6 +122,7 @@ function isObservatronEngaged(){
   return options.engaged;
 }
 
+
 function downloadMHTML(mhtmlData){
 
     if(!isObservatronEngaged()){
@@ -157,9 +152,6 @@ function downloadMHTML(mhtmlData){
 var width, height;
 
 function downloadScreenshot(){
-
-
-
 
     chrome.tabs.captureVisibleTab(function(screenshotUrl) {
 
@@ -198,7 +190,6 @@ function downloadScreenshot(){
                 filename: downloadFileName
               },function(downloadId){
                 console.log("downloaded as " + downloadFileName);
-
         });
 
     });
@@ -248,18 +239,66 @@ function configuredOnPageLoad(anObject){
     return;
   }
 
+    console.log("page load code");
+    //console.log(options);
+    //console.log(anObject);
+
   if(options.onPageLoad){
   
+    console.log("page load");
+    
+    if(!anObject.hasOwnProperty('frameId')){
+      return;
+    }
+
+    if(anObject.frameId!=0){
+      // todo: this should be configurable 0 is page root, others are 'parts' of page loaded dynamically and frames
+      return;
+    }    
+
     if(!anObject.hasOwnProperty('tabId')){
       return;
     }
 
-    console.log(anObject);
+    
+    //console.log(anObject);
 
+    downloadAsLog( "url", anObject, "url");
     saveAsMhtml(anObject.tabId);
     downloadScreenshot();
 
   }
+}
+
+
+function downloadAsLog(fileNameAppend, objectToWrite, attribute){
+
+  // https://developer.mozilla.org/en-US/docs/Web/API/Blob
+
+  if(objectToWrite === undefined){
+    return;
+  }
+  if(!objectToWrite.hasOwnProperty(attribute)){
+    return;
+  }
+
+  var outputObject = {};
+  outputObject[attribute] = objectToWrite[attribute];
+
+  var blob = new Blob([JSON.stringify(outputObject)], {type : 'application/json'});
+  var blobURL = window.URL.createObjectURL(blob);
+
+  var downloadFileName = getFileName(fileNameAppend, "json");
+
+  chrome.downloads.download(
+        {
+          url:blobURL, 
+          filename: downloadFileName
+        },function(downloadId){
+      console.log(downloadFileName);
+      console.log("download begin, the download is:" + downloadFileName);
+  });
+  
 }
 
 function saveAsMhtml(anId){
@@ -272,7 +311,6 @@ function saveAsMhtml(anId){
 
   }
   else{
-
     chrome.pageCapture.saveAsMHTML({tabId: anId}, downloadMHTML);
   }
   
@@ -292,11 +330,16 @@ function getCurrentTab(){
 
 function configuredOnPageUpdated(tabId, changeInfo, tab){
 
+
+
   if(!isObservatronEngaged()){
     return;
   }
 
   if(options.onPageUpdated){
+
+    //console.log("page updated");
+
     if (changeInfo.status == 'complete') {
 
       saveAsMhtml(tabId);
