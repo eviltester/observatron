@@ -221,12 +221,34 @@ function toggle_observatron_status(){
                                    scrolling_timeout: options.resize_timeout_milliseconds}
                                 });
 
-      downloadScreenshot();
-      saveAsMhtml();
+      chrome.tabs.query({ currentWindow: true, active: true }, simulatePageLoadForTab);
+
+      // tabs.getCurrent provided an undefined tab  
+      //chrome.tabs.getCurrent(simulatePageLoadForTab);
+
       
       chrome.browserAction.setIcon({path:"icons/green.png"});
       chrome.browserAction.setTitle({title:"Disengage The Observatron"});
     }
+}
+
+function simulatePageLoadForTab(tab){
+
+  console.log("Observatron Engaged");
+
+  if(tab==undefined){
+    return;
+  }
+
+  var fakeWindowFromTab = {};
+  fakeWindowFromTab["frameId"] = 0;
+  fakeWindowFromTab["tabId"] = tab[0].id;
+  fakeWindowFromTab["url"] = tab[0].url;
+
+  configuredOnPageLoad(fakeWindowFromTab);
+
+  //downloadScreenshot();
+  //saveAsMhtml();
 }
 
 function configuredOnPageLoad(anObject){
