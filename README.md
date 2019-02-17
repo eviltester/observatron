@@ -42,7 +42,7 @@ If you right click on the icon and choose options then you can configure the ext
 
 You can also configure the folder (within dowloads to save the files e.g. change it to match the feature you are testing). Also the file prefix. And the timeouts the system uses for checking if you are still scrolling or still resizing.
 
-Still buggy. Work in progress.
+Work in progress.
 
 ---
 

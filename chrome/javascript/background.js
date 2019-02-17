@@ -124,13 +124,6 @@ function isObservatronEngaged(){
 
 
 
-
-
-
-
-
-
-
 function toggle_observatron_status(){
 
     if(isObservatronEngaged()){
@@ -221,26 +214,7 @@ function configuredOnPageLoad(anObject){
   }
 }
 
-
-
-
-
-
-// using promises https://stackoverflow.com/questions/10413911/how-to-get-the-currently-opened-tabs-url-in-my-page-action-popup
-function getCurrentTab(){
-  return new Promise(function(resolve, reject){
-    chrome.tabs.query(
-      { currentWindow: true, active: true}
-      , function(tabs) {
-      resolve(tabs[0]);
-    });
-  });
-}
-
-
 function configuredOnPageUpdated(tabId, changeInfo, tab){
-
-
 
   if(!isObservatronEngaged()){
     return;
@@ -258,6 +232,23 @@ function configuredOnPageUpdated(tabId, changeInfo, tab){
     }
   }
 }
+
+
+
+
+// using promises https://stackoverflow.com/questions/10413911/how-to-get-the-currently-opened-tabs-url-in-my-page-action-popup
+function getCurrentTab(){
+  return new Promise(function(resolve, reject){
+    chrome.tabs.query(
+      { currentWindow: true, active: true}
+      , function(tabs) {
+      resolve(tabs[0]);
+    });
+  });
+}
+
+
+
 
 
 /*
