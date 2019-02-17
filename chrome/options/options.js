@@ -91,12 +91,17 @@ function save_options() {
   function restore_options() {
         getObservatronDefaults();
   }
+
   document.addEventListener('DOMContentLoaded', restore_options);
   document.getElementById('save').addEventListener('click', save_options);
 
   document.getElementById('defaults').addEventListener('click', set_defaults_on_gui);
-  
+  document.getElementById('optionsheading').innerHTML = "The Observatron - version " + chrome.runtime.getManifest().version;
+
 function set_defaults_on_gui(){
+
+  
+
   document.getElementById('onscroll').checked = true;
   document.getElementById('onresize').checked = true;
   document.getElementById('onpageload').checked = true;
