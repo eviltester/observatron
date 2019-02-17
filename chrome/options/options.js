@@ -16,6 +16,7 @@ function save_options() {
     var isOnPageload = document.getElementById('onpageload').checked;
     var isOnPageupdate = document.getElementById('onpageupdated').checked;
     var isOnPageDoubleClick = document.getElementById('ondoubleclick').checked;
+    var isOnPostFormSubmit = document.getElementById('onpostformsubmit').checked;
     
     var filePath = document.getElementById('filepath').value;
     var fileprefix = document.getElementById('fileprefix').value;
@@ -29,6 +30,7 @@ function save_options() {
     options.onPageLoad = isOnPageload;
     options.onPageUpdated = isOnPageupdate;
     options.onDoubleClickShot = isOnPageDoubleClick;
+    options.onPostSubmit = isOnPostFormSubmit;
 
     options.filepath = filePath;
     if(!options.filepath){
@@ -98,14 +100,17 @@ function displayObservatronOptionsOnGUI(options){
   document.getElementById('onpageload').checked = options.onPageLoad;
   document.getElementById('onpageupdated').checked = options.onPageUpdated;
   document.getElementById('ondoubleclick').checked = options.onDoubleClickShot;
+  document.getElementById('onpostformsubmit').checked = options.onPostSubmit;
   document.getElementById('filepath').value = options.filepath;
   document.getElementById('fileprefix').value = options.fileprefix;
   document.getElementById('scrolling_timeout').value = options.scrolling_timeout_milliseconds;
   document.getElementById('resize_timeout').value = options.resize_timeout_milliseconds;
+  
 }
 
 function set_defaults_on_gui(){
 
+  // todo have the defaults in a shared file if possible
   var defaultOptions = {
     engaged: false,
 
@@ -115,6 +120,7 @@ function set_defaults_on_gui(){
     onPageLoad: true,
     onPageUpdated: false,
     onDoubleClickShot: true,
+    onPostSubmit: false,
   
     // where are the files stored?
     filepath: "observatron/",

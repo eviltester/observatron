@@ -3,7 +3,7 @@
   "version": "0.5",
   "description": "The Observatron observes things in the browser",
   "background": {
-    "persistent": false,
+    "persistent": true,
     "scripts": ["javascript/filenames.js",
                 "javascript/background.js"]
   },
@@ -25,7 +25,8 @@
     "webNavigation",
     "pageCapture",
     "<all_urls>",
-    "storage"    
-  ],
+    "storage",
+    "webRequest"
+    ],
   "manifest_version": 2
 }

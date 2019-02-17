@@ -1,4 +1,4 @@
-
+// TODO: add observatron options amendment from a right click context menu
 
 var options = {
 
@@ -10,6 +10,7 @@ var options = {
   onPageLoad: true,
   onPageUpdated: false,
   onDoubleClickShot: true,
+  onPostSubmit: false,
 
   // where are the files stored?
   filepath: "observatron/",
@@ -75,6 +76,8 @@ function requested(request){
 
 }
 
+// TODO: add and remove listeners based on options, not just soft toggle on variables
+
 chrome.runtime.onMessage.addListener(requested);
 
 // Enable Disable on click
@@ -88,12 +91,39 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
   configuredOnPageUpdated(tabId, changeInfo, tab);
 });
 
-
+// download any form submissions
+// https://developer.chrome.com/extensions/webRequest#event-onBeforeRequest
+chrome.webRequest.onBeforeRequest.addListener(
+  downloadPostForm,
+  {urls: ["<all_urls>"]},
+  ["requestBody"] //"blocking", 
+);
 
 function isObservatronEngaged(){
   return options.engaged;
 }
 
+function downloadPostForm(details){
+  if(!isObservatronEngaged()){
+    return;
+  }
+
+  if(!options.onPostSubmit){
+    return;
+  }
+
+  if(details.method == "POST"){
+    console.log(JSON.stringify(details));
+
+    logThis = {};
+    logThis.url = details.url;
+    logThis.method = details.method;
+    if(details.requestBody){
+      logThis.formData = details.requestBody.formData;
+      downloadAsLog("form_post", logThis);
+    }
+  }
+}
 
 
 function toggle_observatron_status(){
@@ -274,12 +304,17 @@ function downloadAsLog(fileNameAppend, objectToWrite, attribute){
   if(objectToWrite === undefined){
     return;
   }
-  if(!objectToWrite.hasOwnProperty(attribute)){
-    return;
-  }
+  
 
   var outputObject = {};
-  outputObject[attribute] = objectToWrite[attribute];
+  if(attribute!==undefined){
+    if(!objectToWrite.hasOwnProperty(attribute)){
+      return;
+    }
+    outputObject[attribute] = objectToWrite[attribute];
+  }else{
+    outputObject=objectToWrite;
+  }
 
   var blob = new Blob([JSON.stringify(outputObject)], {type : 'application/json'});
   var blobURL = window.URL.createObjectURL(blob);

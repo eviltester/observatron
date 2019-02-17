@@ -38,7 +38,8 @@ If you right click on the icon and choose options then you can configure the ext
 - [ ] On Resize (take a screenshot after you resize the browser window)
 - [ ] On Page Load (take a screenshot and save an mhtml when the page loads)
 - [ ] On Page Updated (take a screenshot and save an mhtml when the page updates)
-- [ ] Screenshot On Double click ((take a screenshot when you double click on the page)
+- [ ] Screenshot On Double click (take a screenshot when you double click on the page)
+- [ ] Log POST form contents to a file (should log form Posts to a json file - off by default) 
 
 You can also configure the folder (within dowloads to save the files e.g. change it to match the feature you are testing). Also the file prefix. And the timeouts the system uses for checking if you are still scrolling or still resizing.
 
@@ -55,12 +56,13 @@ https://compendiumdev.co.uk
 
 ## Detailed Description
 
-The Observatron supports Exploratory testing by taking screenshots and creating .mhtml files as you test.
+The Observatron supports Exploratory testing by taking screenshots and creating .mhtml files as you test. It also logs urls and form submissions.
 
 - when a page loads
 - when you double click on the page
 - when you resize the page
 - when you scroll through the page
+- when you submit a form
 
 All of the above can be switched on and off from the options.
 
