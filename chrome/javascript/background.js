@@ -123,31 +123,215 @@ function isObservatronEngaged(){
 }
 
 
-function downloadMHTML(mhtmlData){
 
-    if(!isObservatronEngaged()){
+
+
+
+
+
+
+
+function toggle_observatron_status(){
+
+    if(isObservatronEngaged()){
+      // switch it off
+      console.log("Observatron Disengaged");
+      options.engaged = false;
+
+      changedOptions();
+
+      chrome.browserAction.setIcon({path:"icons/red.png"});
+      chrome.browserAction.setTitle({title:"Engage The Observatron"});
+
+    }else{
+      // switch it on
+      console.log("Observatron Engaged");
+      options.engaged=true;
+
+      changedOptions();
+
+      chrome.storage.local.set({observatron_screenshotter: 
+                                  {resize_timeout: options.resize_timeout_milliseconds,
+                                   scrolling_timeout: options.resize_timeout_milliseconds}
+                                });
+
+      chrome.tabs.query({ currentWindow: true, active: true }, simulatePageLoadForTab);
+
+      // tabs.getCurrent provided an undefined tab  
+      //chrome.tabs.getCurrent(simulatePageLoadForTab);
+
+      
+      chrome.browserAction.setIcon({path:"icons/green.png"});
+      chrome.browserAction.setTitle({title:"Disengage The Observatron"});
+    }
+}
+
+function simulatePageLoadForTab(tab){
+
+  if(tab==undefined){
+    return;
+  }
+
+  var fakeWindowFromTab = {};
+  fakeWindowFromTab["frameId"] = 0;
+  fakeWindowFromTab["tabId"] = tab[0].id;
+  fakeWindowFromTab["url"] = tab[0].url;
+
+  configuredOnPageLoad(fakeWindowFromTab);
+}
+
+function configuredOnPageLoad(anObject){
+
+  if(!isObservatronEngaged()){
+    return;
+  }
+
+  if(anObject === undefined){
+    return;
+  }
+
+    console.log("page load code");
+    //console.log(options);
+    //console.log(anObject);
+
+  if(options.onPageLoad){
+  
+    console.log("page load");
+    
+    if(!anObject.hasOwnProperty('frameId')){
       return;
     }
 
-    var downloadFileName = getFileName("mhtmldata", "mhtml");
+    if(anObject.frameId!=0){
+      // todo: this should be configurable 0 is page root, others are 'parts' of page loaded dynamically and frames
+      return;
+    }    
 
-      // convert blob to url found at https://bugzilla.mozilla.org/show_bug.cgi?format=default&id=1271345
-      //console.log(mhtmlData);   
+    if(!anObject.hasOwnProperty('tabId')){
+      return;
+    }
 
-      var blobURL = window.URL.createObjectURL(mhtmlData);
+    
+    //console.log(anObject);
 
-      chrome.downloads.download(
-            {
-              url:blobURL, 
-              filename: downloadFileName
-            },function(downloadId){
-          console.log(downloadFileName);
-          console.log("download begin, the download is:" + downloadFileName);
-      });
+    downloadAsLog( "url", anObject, "url");
+    saveAsMhtml(anObject.tabId);
+    downloadScreenshot();
 
+  }
 }
 
 
+
+
+
+
+// using promises https://stackoverflow.com/questions/10413911/how-to-get-the-currently-opened-tabs-url-in-my-page-action-popup
+function getCurrentTab(){
+  return new Promise(function(resolve, reject){
+    chrome.tabs.query(
+      { currentWindow: true, active: true}
+      , function(tabs) {
+      resolve(tabs[0]);
+    });
+  });
+}
+
+
+function configuredOnPageUpdated(tabId, changeInfo, tab){
+
+
+
+  if(!isObservatronEngaged()){
+    return;
+  }
+
+  if(options.onPageUpdated){
+
+    //console.log("page updated");
+
+    if (changeInfo.status == 'complete') {
+
+      saveAsMhtml(tabId);
+      downloadScreenshot(); 
+
+    }
+  }
+}
+
+
+/*
+
+  DOWNLOADS
+
+*/
+
+
+function saveAsMhtml(anId){
+
+  if(anId == undefined){   
+      getCurrentTab().then(function(tab){
+        chrome.pageCapture.saveAsMHTML({tabId: tab.id}, downloadMHTML);
+      });
+  }
+  else{
+      chrome.pageCapture.saveAsMHTML({tabId: anId}, downloadMHTML);
+  }
+}
+
+function downloadMHTML(mhtmlData){
+
+  if(!isObservatronEngaged()){
+    return;
+  }
+
+  var downloadFileName = getFileName("mhtmldata", "mhtml");
+
+    // convert blob to url found at https://bugzilla.mozilla.org/show_bug.cgi?format=default&id=1271345
+    //console.log(mhtmlData);   
+
+    var blobURL = window.URL.createObjectURL(mhtmlData);
+
+    chrome.downloads.download(
+          {
+            url:blobURL, 
+            filename: downloadFileName
+          },function(downloadId){
+        console.log(downloadFileName);
+        console.log("download begin, the download is:" + downloadFileName);
+    });
+
+}
+
+function downloadAsLog(fileNameAppend, objectToWrite, attribute){
+
+  // https://developer.mozilla.org/en-US/docs/Web/API/Blob
+
+  if(objectToWrite === undefined){
+    return;
+  }
+  if(!objectToWrite.hasOwnProperty(attribute)){
+    return;
+  }
+
+  var outputObject = {};
+  outputObject[attribute] = objectToWrite[attribute];
+
+  var blob = new Blob([JSON.stringify(outputObject)], {type : 'application/json'});
+  var blobURL = window.URL.createObjectURL(blob);
+
+  var downloadFileName = getFileName(fileNameAppend, "json");
+
+  chrome.downloads.download(
+        {
+          url:blobURL, 
+          filename: downloadFileName
+        },function(downloadId){
+      console.log(downloadFileName);
+      console.log("download begin, the download is:" + downloadFileName);
+  });
+  
+}
 
 var width, height;
 
@@ -193,180 +377,4 @@ function downloadScreenshot(){
         });
 
     });
-}
-
-
-
-function toggle_observatron_status(){
-
-    if(isObservatronEngaged()){
-      // switch it off
-      console.log("Observatron Disengaged");
-      options.engaged = false;
-
-      changedOptions();
-
-      chrome.browserAction.setIcon({path:"icons/red.png"});
-      chrome.browserAction.setTitle({title:"Engage The Observatron"});
-
-    }else{
-      // switch it on
-      console.log("Observatron Engaged");
-      options.engaged=true;
-
-      changedOptions();
-
-      chrome.storage.local.set({observatron_screenshotter: 
-                                  {resize_timeout: options.resize_timeout_milliseconds,
-                                   scrolling_timeout: options.resize_timeout_milliseconds}
-                                });
-
-      chrome.tabs.query({ currentWindow: true, active: true }, simulatePageLoadForTab);
-
-      // tabs.getCurrent provided an undefined tab  
-      //chrome.tabs.getCurrent(simulatePageLoadForTab);
-
-      
-      chrome.browserAction.setIcon({path:"icons/green.png"});
-      chrome.browserAction.setTitle({title:"Disengage The Observatron"});
-    }
-}
-
-function simulatePageLoadForTab(tab){
-
-  console.log("Observatron Engaged");
-
-  if(tab==undefined){
-    return;
-  }
-
-  var fakeWindowFromTab = {};
-  fakeWindowFromTab["frameId"] = 0;
-  fakeWindowFromTab["tabId"] = tab[0].id;
-  fakeWindowFromTab["url"] = tab[0].url;
-
-  configuredOnPageLoad(fakeWindowFromTab);
-
-  //downloadScreenshot();
-  //saveAsMhtml();
-}
-
-function configuredOnPageLoad(anObject){
-
-  if(!isObservatronEngaged()){
-    return;
-  }
-
-  if(anObject === undefined){
-    return;
-  }
-
-    console.log("page load code");
-    //console.log(options);
-    //console.log(anObject);
-
-  if(options.onPageLoad){
-  
-    console.log("page load");
-    
-    if(!anObject.hasOwnProperty('frameId')){
-      return;
-    }
-
-    if(anObject.frameId!=0){
-      // todo: this should be configurable 0 is page root, others are 'parts' of page loaded dynamically and frames
-      return;
-    }    
-
-    if(!anObject.hasOwnProperty('tabId')){
-      return;
-    }
-
-    
-    //console.log(anObject);
-
-    downloadAsLog( "url", anObject, "url");
-    saveAsMhtml(anObject.tabId);
-    downloadScreenshot();
-
-  }
-}
-
-
-function downloadAsLog(fileNameAppend, objectToWrite, attribute){
-
-  // https://developer.mozilla.org/en-US/docs/Web/API/Blob
-
-  if(objectToWrite === undefined){
-    return;
-  }
-  if(!objectToWrite.hasOwnProperty(attribute)){
-    return;
-  }
-
-  var outputObject = {};
-  outputObject[attribute] = objectToWrite[attribute];
-
-  var blob = new Blob([JSON.stringify(outputObject)], {type : 'application/json'});
-  var blobURL = window.URL.createObjectURL(blob);
-
-  var downloadFileName = getFileName(fileNameAppend, "json");
-
-  chrome.downloads.download(
-        {
-          url:blobURL, 
-          filename: downloadFileName
-        },function(downloadId){
-      console.log(downloadFileName);
-      console.log("download begin, the download is:" + downloadFileName);
-  });
-  
-}
-
-function saveAsMhtml(anId){
-
-  if(anId == undefined){
-    
-    getCurrentTab().then(function(tab){
-      chrome.pageCapture.saveAsMHTML({tabId: tab.id}, downloadMHTML);
-    });
-
-  }
-  else{
-    chrome.pageCapture.saveAsMHTML({tabId: anId}, downloadMHTML);
-  }
-  
-}
-
-// using promises https://stackoverflow.com/questions/10413911/how-to-get-the-currently-opened-tabs-url-in-my-page-action-popup
-function getCurrentTab(){
-  return new Promise(function(resolve, reject){
-    chrome.tabs.query(
-      { currentWindow: true, active: true}
-      , function(tabs) {
-      resolve(tabs[0]);
-    });
-  });
-}
-
-
-function configuredOnPageUpdated(tabId, changeInfo, tab){
-
-
-
-  if(!isObservatronEngaged()){
-    return;
-  }
-
-  if(options.onPageUpdated){
-
-    //console.log("page updated");
-
-    if (changeInfo.status == 'complete') {
-
-      saveAsMhtml(tabId);
-      downloadScreenshot(); 
-
-    }
-  }
 }

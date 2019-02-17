@@ -8,8 +8,6 @@ function getObservatronDefaults(){
     chrome.storage.local.get(['observatron'], setObservatronDefaults);
 }
 
-
-
 function save_options() {
 
     //var isEngaged = document.getElementById('observatrononoff').checked;
