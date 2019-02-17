@@ -88,35 +88,7 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
   configuredOnPageUpdated(tabId, changeInfo, tab);
 });
 
-function zeropadDigits(padthis, padding){
-  return ("000000" + padthis).slice((-1 * padding));
-}
 
-function getFileName(filetype, extension){
-
-    var datePart = new Date();
-
-    var dateString = datePart.getFullYear() +
-                      "-" + zeropadDigits(datePart.getMonth()+1,2) +
-                      "-" + zeropadDigits(datePart.getDate(),2) +
-                      "-" + zeropadDigits(datePart.getHours(),2) + 
-                      "-" + zeropadDigits(datePart.getMinutes(),2) + 
-                      "-" + zeropadDigits(datePart.getSeconds(),2) +
-                      "-" + zeropadDigits(datePart.getMilliseconds(),3);
-
-    var folderpath = datePart.getFullYear() + "/" + 
-                    zeropadDigits(datePart.getMonth()+1,2) + "/" +
-                    zeropadDigits(datePart.getDate(),2) + "/";
-      
-
-    var downloadFileName =  options.filepath+
-                            folderpath+
-                            options.fileprefix+
-                            dateString+
-                            "-" + filetype + "." + extension;
-    
-    return downloadFileName;                            
-}
 
 function isObservatronEngaged(){
   return options.engaged;
@@ -276,7 +248,7 @@ function downloadMHTML(mhtmlData){
     return;
   }
 
-  var downloadFileName = getFileName("mhtmldata", "mhtml");
+  var downloadFileName = getFileName(options.filepath, options.fileprefix, "mhtmldata", "mhtml");
 
     // convert blob to url found at https://bugzilla.mozilla.org/show_bug.cgi?format=default&id=1271345
     //console.log(mhtmlData);   
@@ -311,7 +283,7 @@ function downloadAsLog(fileNameAppend, objectToWrite, attribute){
   var blob = new Blob([JSON.stringify(outputObject)], {type : 'application/json'});
   var blobURL = window.URL.createObjectURL(blob);
 
-  var downloadFileName = getFileName(fileNameAppend, "json");
+  var downloadFileName = getFileName(options.filepath, options.fileprefix, fileNameAppend, "json");
 
   chrome.downloads.download(
         {
@@ -356,7 +328,7 @@ function downloadScreenshot(){
 
         var dimensions = "-" + width + "x" + height;
 
-        var downloadFileName = getFileName("screenshot"+dimensions, "jpg");
+        var downloadFileName = getFileName(options.filepath, options.fileprefix, "screenshot"+dimensions, "jpg");
 
 
         chrome.downloads.download(

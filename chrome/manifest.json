@@ -4,7 +4,8 @@
   "description": "The Observatron observes things in the browser",
   "background": {
     "persistent": false,
-    "scripts": ["javascript/background.js"]
+    "scripts": ["javascript/filenames.js",
+                "javascript/background.js"]
   },
   "browser_action": {
     "default_icon": "icons/red.png",
