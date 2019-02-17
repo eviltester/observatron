@@ -53,21 +53,21 @@ function requested(request){
   if (request.method === 'resize') {
     if(options.onResizeEvent){
       console.log("shot on resize");
-      downloadScreenshot();
+      takeScreenshotIfWeCareAboutPage();
     }
   }
 
   if (request.method === 'screenshotdbl') {
     if(options.onDoubleClickShot){
       console.log("shot on doubleclick");
-      downloadScreenshot();
+      takeScreenshotIfWeCareAboutPage();
     }
   }
 
   if (request.method === 'scrolled') {
     if(options.onScrollEvent === true){
       console.log("shot on scrolled");
-      downloadScreenshot();
+      takeScreenshotIfWeCareAboutPage();
     }
   }
 
@@ -181,7 +181,7 @@ function configuredOnPageLoad(anObject){
 
     downloadAsLog( "url", anObject, "url");
     saveAsMhtml(anObject.tabId);
-    downloadScreenshot();
+    takeScreenshotIfWeCareAboutPage();
 
   }
 }
@@ -198,8 +198,9 @@ function configuredOnPageUpdated(tabId, changeInfo, tab){
 
     if (changeInfo.status == 'complete') {
 
+      downloadAsLog( "url", anObject, "url");
       saveAsMhtml(tabId);
-      downloadScreenshot(); 
+      takeScreenshotIfWeCareAboutPage(); 
 
     }
   }
@@ -297,6 +298,27 @@ function downloadAsLog(fileNameAppend, objectToWrite, attribute){
 }
 
 var width, height;
+
+function takeScreenshotIfWeCareAboutPage(){
+
+      // Some pages do not screenshot well, 
+      // e.g. apps and options so we do not care about those
+      chrome.tabs.query({ currentWindow: true, active: true }, function(tabs){
+
+        /* check if it is a tab we care about i.e. not apps or devtools */
+        if(tabs[0]==undefined){
+          return;
+        }
+        if(!tabs[0].hasOwnProperty("id")){
+          return;
+        }
+        if(tabs[0].id==chrome.tabs.TAB_ID_NONE){
+          return;
+        }
+
+        downloadScreenshot();
+      });
+}
 
 function downloadScreenshot(){
 
