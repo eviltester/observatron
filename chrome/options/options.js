@@ -8,25 +8,7 @@ function getObservatronDefaults(){
     chrome.storage.local.get(['observatron'], setObservatronDefaults);
 }
 
-function setObservatronDefaults(setoptions){
-    if(setoptions){
-        options = setoptions.observatron;
-          console.log("set popup defaults from observatron");
-          console.log(options);
 
-        //document.getElementById('observatrononoff').checked = options.engaged;
-        document.getElementById('onscroll').checked = options.onScrollEvent;
-        document.getElementById('onresize').checked = options.onResizeEvent;
-        document.getElementById('onpageload').checked = options.onPageLoad;
-        document.getElementById('onpageupdated').checked = options.onPageUpdated;
-        document.getElementById('ondoubleclick').checked = options.onDoubleClickShot;
-        document.getElementById('filepath').value = options.filepath;
-        document.getElementById('fileprefix').value = options.fileprefix;
-        document.getElementById('scrolling_timeout').value = options.scrolling_timeout_milliseconds;
-        document.getElementById('resize_timeout').value = options.resize_timeout_milliseconds;
-    
-    }
-  }
 
 function save_options() {
 
@@ -98,19 +80,55 @@ function save_options() {
   document.getElementById('defaults').addEventListener('click', set_defaults_on_gui);
   document.getElementById('optionsheading').innerHTML = "The Observatron - version " + chrome.runtime.getManifest().version;
 
+
+
+function setObservatronDefaults(setoptions){
+  if(setoptions){
+      options = setoptions.observatron;
+        console.log("set popup defaults from observatron");
+        displayObservatronOptionsOnGUI(options);
+  
+  }
+}
+
+function displayObservatronOptionsOnGUI(options){
+  console.log(options);
+
+  //document.getElementById('observatrononoff').checked = options.engaged;
+  document.getElementById('onscroll').checked = options.onScrollEvent;
+  document.getElementById('onresize').checked = options.onResizeEvent;
+  document.getElementById('onpageload').checked = options.onPageLoad;
+  document.getElementById('onpageupdated').checked = options.onPageUpdated;
+  document.getElementById('ondoubleclick').checked = options.onDoubleClickShot;
+  document.getElementById('filepath').value = options.filepath;
+  document.getElementById('fileprefix').value = options.fileprefix;
+  document.getElementById('scrolling_timeout').value = options.scrolling_timeout_milliseconds;
+  document.getElementById('resize_timeout').value = options.resize_timeout_milliseconds;
+}
+
 function set_defaults_on_gui(){
 
-  
+  var defaultOptions = {
+    engaged: false,
 
-  document.getElementById('onscroll').checked = true;
-  document.getElementById('onresize').checked = true;
-  document.getElementById('onpageload').checked = true;
-  document.getElementById('onpageupdated').checked = false;
-  document.getElementById('ondoubleclick').checked = true;
-  document.getElementById('filepath').value = "observatron/";
-  document.getElementById('fileprefix').value = "obs_";
-  document.getElementById('scrolling_timeout').value = 500;
-  document.getElementById('resize_timeout').value = 500;
+    // which events are we responding to
+    onScrollEvent: true,
+    onResizeEvent: true,
+    onPageLoad: true,
+    onPageUpdated: false,
+    onDoubleClickShot: true,
+  
+    // where are the files stored?
+    filepath: "observatron/",
+    fileprefix: "obs_",
+  
+    // 
+    scrolling_timeout_milliseconds: 500,
+    resize_timeout_milliseconds: 500
+
+  };
+
+  displayObservatronOptionsOnGUI(defaultOptions);
 }
 
 chrome.storage.onChanged.addListener(function(changes, namespace) {
