@@ -46,10 +46,12 @@ contextMenus.takeScreenshotNow =
 contextMenus.takeScreenshotNow = 
   chrome.contextMenus.create(
     {"title": "Save as MHTML Now", "type": "normal", "onclick":contextMenuSaveAsMhtml});
-    
+
+   
 contextMenus.line = 
-  chrome.contextMenus.create(
-    {"type": "separator"});
+    chrome.contextMenus.create(
+      {"type": "separator"});    
+
 
 contextMenus.toggleOnScroll = 
   chrome.contextMenus.create(
@@ -75,10 +77,24 @@ contextMenus.togglePostSubmit =
   chrome.contextMenus.create(
   {"title": "Log Post Submit", "type": "checkbox", "checked" : options.onPostSubmit, "onclick":contextMenuPostSubmit});
 
+contextMenus.line2 = 
+  chrome.contextMenus.create(
+    {"type": "separator"});
+
+contextMenus.showOptionsNow = 
+    chrome.contextMenus.create(
+      {"title": "Options", "type": "normal", "onclick":contextMenuShowOptions}); 
+
 
 function contextMenuSaveAsMhtml(){
   saveAsMhtml();
 }   
+
+function contextMenuShowOptions(){
+  chrome.tabs.create({url:"options/options_page.html"});
+}  
+
+
 
 function contextMenuPostSubmit(){
   contextMenuHandler("postsubmit");

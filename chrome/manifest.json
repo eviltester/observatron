@@ -14,6 +14,9 @@
     "default_icon": "icons/red.png",
     "default_title": "Engage The Observatron"
   },
+  "icons": {
+    "16": "icons/red.png"
+  },
   "options_page": "options/options_page.html",
   "content_scripts": [
     {
