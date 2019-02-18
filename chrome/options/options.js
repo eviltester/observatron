@@ -19,53 +19,22 @@ function getObservatronDefaults(){
 
 function save_options() {
 
-    //var isEngaged = document.getElementById('observatrononoff').checked;
-    var isOnScroll = document.getElementById('onscroll').checked;
-    var isOnResize = document.getElementById('onresize').checked;
-    var isOnPageload = document.getElementById('onpageload').checked;
-    var isOnPageupdate = document.getElementById('onpageupdated').checked;
-    var isOnPageDoubleClick = document.getElementById('ondoubleclick').checked;
-    var isOnPostFormSubmit = document.getElementById('onpostformsubmit').checked;
+    var newOptions = new Options(); // defaults are set so only set if valid
+
+    newOptions.setOnResizeEvent(document.getElementById('onresize').checked);
+    newOptions.setOnScrollEvent(document.getElementById('onscroll').checked);
+    newOptions.setOnPageLoad(document.getElementById('onpageload').checked);
+    newOptions.setOnPageUpdated(document.getElementById('onpageupdated').checked);
+    newOptions.setOnDoubleClickShot(document.getElementById('ondoubleclick').checked);
+    newOptions.setOnPostSubmit(document.getElementById('onpostformsubmit').checked);
     
-    var filePath = document.getElementById('filepath').value;
-    var fileprefix = document.getElementById('fileprefix').value;
-    var scrollingtimeout = document.getElementById('scrolling_timeout').value;
-    var resizetimeout = document.getElementById('resize_timeout').value;
+    newOptions.setScrollingTimeoutMilliseconds(document.getElementById('scrolling_timeout').value);
+    newOptions.setResizeTimeoutMilliseconds(document.getElementById('resize_timeout').value);
     
-    
-    //options.engaged = isEngaged;
-    options.onResizeEvent = isOnResize;
-    options.onScrollEvent=isOnScroll;
-    options.onPageLoad = isOnPageload;
-    options.onPageUpdated = isOnPageupdate;
-    options.onDoubleClickShot = isOnPageDoubleClick;
-    options.onPostSubmit = isOnPostFormSubmit;
+    newOptions.setFilePath(document.getElementById('filepath').value);
+    newOptions.setFilePrefix(document.getElementById('fileprefix').value);    
 
-    options.filepath = filePath;
-    if(!options.filepath){
-      options.filepath = "";
-    }
-    options.fileprefix = fileprefix;
-    if(!options.fileprefix){
-      options.filepath = "";
-    }
-
-    if(isNaN(scrollingtimeout)){
-      scrollingtimeout=500;
-    }
-    if(scrollingtimeout<0){
-      scrollingtimeout=0;
-    }
-
-    if(isNaN(resizetimeout)){
-      resizetimeout=500;
-    }
-    if(resizetimeout<0){
-      resizetimeout=0;
-    }
-
-    options.scrolling_timeout_milliseconds = scrollingtimeout;
-    options.resize_timeout_milliseconds = resizetimeout;
+    options = newOptions;
 
     chrome.storage.local.set({observatron: options}, function() {
       // Update status to let user know options were saved.
@@ -90,16 +59,15 @@ function save_options() {
 function setObservatronDefaults(setoptions){
   if(setoptions){
       options = setoptions.observatron;
-        console.log("set popup defaults from observatron");
+        //console.log("set popup defaults from observatron");
         displayObservatronOptionsOnGUI(options);
   
   }
 }
 
 function displayObservatronOptionsOnGUI(options){
-  console.log(options);
+  //console.log(options);
 
-  //document.getElementById('observatrononoff').checked = options.engaged;
   document.getElementById('onscroll').checked = options.onScrollEvent;
   document.getElementById('onresize').checked = options.onResizeEvent;
   document.getElementById('onpageload').checked = options.onPageLoad;
@@ -111,6 +79,8 @@ function displayObservatronOptionsOnGUI(options){
   document.getElementById('scrolling_timeout').value = options.scrolling_timeout_milliseconds;
   document.getElementById('resize_timeout').value = options.resize_timeout_milliseconds;
   
+  setHeadingOnPage();
+
 }
 
 function set_defaults_on_gui(){
@@ -121,6 +91,13 @@ function set_defaults_on_gui(){
   displayObservatronOptionsOnGUI(defaultOptions);
 }
 
+function setHeadingOnPage(){
+
+    var textToRender = "The Observatron - version " + chrome.runtime.getManifest().version;
+    textToRender = textToRender + (options.engaged ? " (On)" : " (Off)");
+
+    document.getElementById('optionsheading').innerHTML = textToRender;
+}
 
 /*
   Setup the page
@@ -130,6 +107,4 @@ getObservatronDefaults();
 
 document.addEventListener('DOMContentLoaded', restore_options);
 document.getElementById('save').addEventListener('click', save_options);
-
 document.getElementById('defaults').addEventListener('click', set_defaults_on_gui);
-document.getElementById('optionsheading').innerHTML = "The Observatron - version " + chrome.runtime.getManifest().version;
