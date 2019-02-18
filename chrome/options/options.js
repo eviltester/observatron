@@ -1,8 +1,17 @@
 'use strict';
 
-var options = {enabled: false};
+var options = new Options();
 
-getObservatronDefaults();
+
+chrome.storage.onChanged.addListener(function(changes, namespace) {
+  if(namespace === "local"){
+    if(changes.hasOwnProperty("observatron")){
+      restore_options();
+    }
+  }
+});
+
+
 
 function getObservatronDefaults(){
     chrome.storage.local.get(['observatron'], setObservatronDefaults);
@@ -74,11 +83,7 @@ function save_options() {
         getObservatronDefaults();
   }
 
-  document.addEventListener('DOMContentLoaded', restore_options);
-  document.getElementById('save').addEventListener('click', save_options);
-
-  document.getElementById('defaults').addEventListener('click', set_defaults_on_gui);
-  document.getElementById('optionsheading').innerHTML = "The Observatron - version " + chrome.runtime.getManifest().version;
+ 
 
 
 
@@ -111,34 +116,20 @@ function displayObservatronOptionsOnGUI(options){
 function set_defaults_on_gui(){
 
   // todo have the defaults in a shared file if possible
-  var defaultOptions = {
-    engaged: false,
-
-    // which events are we responding to
-    onScrollEvent: true,
-    onResizeEvent: true,
-    onPageLoad: true,
-    onPageUpdated: false,
-    onDoubleClickShot: true,
-    onPostSubmit: false,
-  
-    // where are the files stored?
-    filepath: "observatron/",
-    fileprefix: "obs_",
-  
-    // 
-    scrolling_timeout_milliseconds: 500,
-    resize_timeout_milliseconds: 500
-
-  };
+  var defaultOptions = new Options();
 
   displayObservatronOptionsOnGUI(defaultOptions);
 }
 
-chrome.storage.onChanged.addListener(function(changes, namespace) {
-  if(namespace === "local"){
-    if(changes.hasOwnProperty("observatron")){
-      restore_options();
-    }
-  }
-});
+
+/*
+  Setup the page
+*/
+
+getObservatronDefaults();
+
+document.addEventListener('DOMContentLoaded', restore_options);
+document.getElementById('save').addEventListener('click', save_options);
+
+document.getElementById('defaults').addEventListener('click', set_defaults_on_gui);
+document.getElementById('optionsheading').innerHTML = "The Observatron - version " + chrome.runtime.getManifest().version;

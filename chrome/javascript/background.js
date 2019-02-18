@@ -1,34 +1,50 @@
 // TODO: add observatron options amendment from a right click context menu
+// TODO: when update options, refresh code in each current tab
 
-var options = {
 
-  engaged: false,
-
-  // which events are we responding to
-  onScrollEvent: true,
-  onResizeEvent: true,
-  onPageLoad: true,
-  onPageUpdated: false,
-  onDoubleClickShot: true,
-  onPostSubmit: false,
-
-  // where are the files stored?
-  filepath: "observatron/",
-  fileprefix: "obs_",
-
-  // 
-  scrolling_timeout_milliseconds: 500,
-  resize_timeout_milliseconds: 500
-}
-
-function changedOptions(){
-  chrome.storage.local.set({observatron: options});
-}
+var options = new Options();
 
 changedOptions();
 
+/*
+    Event Routing Configuration
+*/
+
+
 // https://developer.chrome.com/extensions/storage
-chrome.storage.onChanged.addListener(function(changes, namespace) {
+chrome.storage.onChanged.addListener(storageHasChanged);
+
+
+// TODO: add and remove listeners based on options, not just soft toggle on variables
+
+chrome.runtime.onMessage.addListener(requested);
+
+// Enable Disable on click
+chrome.browserAction.onClicked.addListener(function() {
+  toggle_observatron_status();
+});
+
+chrome.webNavigation.onCompleted.addListener(configuredOnPageLoad);
+
+chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
+  configuredOnPageUpdated(tabId, changeInfo, tab);
+});
+
+// download any form submissions
+// https://developer.chrome.com/extensions/webRequest#event-onBeforeRequest
+chrome.webRequest.onBeforeRequest.addListener(
+  downloadPostForm,
+  {urls: ["<all_urls>"]},["requestBody"] //"blocking", 
+);
+
+
+/*
+
+    Storage
+
+*/
+
+function storageHasChanged(changes, namespace) {
   if(namespace === "local"){
     if(changes.hasOwnProperty("observatron")){
       options = changes["observatron"].newValue;
@@ -37,10 +53,17 @@ chrome.storage.onChanged.addListener(function(changes, namespace) {
       }
     }
   }
-});
+}
+
+function changedOptions(){
+  chrome.storage.local.set({observatron: options});
+}
 
 
 
+/*
+      Message Handling
+*/
 
 // useful info
 //https://stackoverflow.com/questions/13141072/how-to-get-notified-on-window-resize-in-chrome-browser
@@ -76,54 +99,12 @@ function requested(request){
 
 }
 
-// TODO: add and remove listeners based on options, not just soft toggle on variables
-
-chrome.runtime.onMessage.addListener(requested);
-
-// Enable Disable on click
-chrome.browserAction.onClicked.addListener(function() {
-  toggle_observatron_status();
-});
-
-chrome.webNavigation.onCompleted.addListener(configuredOnPageLoad);
-
-chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-  configuredOnPageUpdated(tabId, changeInfo, tab);
-});
-
-// download any form submissions
-// https://developer.chrome.com/extensions/webRequest#event-onBeforeRequest
-chrome.webRequest.onBeforeRequest.addListener(
-  downloadPostForm,
-  {urls: ["<all_urls>"]},
-  ["requestBody"] //"blocking", 
-);
 
 function isObservatronEngaged(){
   return options.engaged;
 }
 
-function downloadPostForm(details){
-  if(!isObservatronEngaged()){
-    return;
-  }
 
-  if(!options.onPostSubmit){
-    return;
-  }
-
-  if(details.method == "POST"){
-    console.log(JSON.stringify(details));
-
-    logThis = {};
-    logThis.url = details.url;
-    logThis.method = details.method;
-    if(details.requestBody){
-      logThis.formData = details.requestBody.formData;
-      downloadAsLog("form_post", logThis);
-    }
-  }
-}
 
 
 function toggle_observatron_status(){
@@ -295,6 +276,28 @@ function downloadMHTML(mhtmlData){
         console.log("download begin, the download is:" + downloadFileName);
     });
 
+}
+
+function downloadPostForm(details){
+  if(!isObservatronEngaged()){
+    return;
+  }
+
+  if(!options.onPostSubmit){
+    return;
+  }
+
+  if(details.method == "POST"){
+    console.log(JSON.stringify(details));
+
+    logThis = {};
+    logThis.url = details.url;
+    logThis.method = details.method;
+    if(details.requestBody){
+      logThis.formData = details.requestBody.formData;
+      downloadAsLog("form_post", logThis);
+    }
+  }
 }
 
 function downloadAsLog(fileNameAppend, objectToWrite, attribute){
