@@ -1,4 +1,5 @@
 // TODO: when update options, refresh code in each current tab
+// https://stackoverflow.com/questions/10994324/chrome-extension-content-script-re-injection-after-upgrade-or-install/11598753#11598753
 
 
 var options = new Options();
@@ -36,53 +37,42 @@ chrome.webRequest.onBeforeRequest.addListener(
   {urls: ["<all_urls>"]},["requestBody"] //"blocking", 
 );
 
+// https://developer.chrome.com/extensions/contextMenus
 var contextMenus = {};
-
-contextMenus.takeScreenshotNow = 
-  chrome.contextMenus.create(
-    {"title": "Take Screenshot Now", "type": "normal", "onclick":downloadScreenshot});
-
-contextMenus.takeScreenshotNow = 
-  chrome.contextMenus.create(
-    {"title": "Save as MHTML Now", "type": "normal", "onclick":contextMenuSaveAsMhtml});
-
-   
-contextMenus.line = 
-    chrome.contextMenus.create(
-      {"type": "separator"});    
+var contextTypes = ["page", "browser_action"];
 
 
-contextMenus.toggleOnScroll = 
-  chrome.contextMenus.create(
-  {"title": "Screenshot on Scroll", "type": "checkbox", "checked" : options.onScrollEvent, "onclick":contextMenuScroll});
+function createSeparator(){
+  // since there is a limit to the number of options in the browser top level item, do not include separators in that menu
+  // console.log(chrome.contextMenus.ACTION_MENU_TOP_LEVEL_LIMIT);
+  return chrome.contextMenus.create({"type": "separator", "contexts": ["page"]}); 
+}
 
-contextMenus.toggleOnResize = 
-  chrome.contextMenus.create(
-  {"title": "Screenshot on resize", "type": "checkbox", "checked" : options.onResizeEvent, "onclick":contextMenuResize});  
+function createMenu(title, onclickfunction){
+  return chrome.contextMenus.create(
+    {"title": title, "type": "normal", "contexts": contextTypes, "onclick":onclickfunction});
+}
 
-contextMenus.toggleOnPageLoad = 
-  chrome.contextMenus.create(
-  {"title": "Log on Page Load", "type": "checkbox", "checked" : options.onPageLoad, "onclick":contextMenuPageLoad});
+function createCheckboxMenu(title, currentStatus, onclickfunction){
+  return chrome.contextMenus.create(
+    {"title": title, "type": "checkbox", "checked" : options.onScrollEvent, "contexts": contextTypes, "onclick":onclickfunction});
+}
 
-contextMenus.toggleOnPageUpdated = 
-  chrome.contextMenus.create(
-  {"title": "Log on Page Updated", "type": "checkbox", "checked" : options.onPageUpdated, "onclick":contextMenuPageUpdated});
 
-contextMenus.toggleDoubleClick = 
-  chrome.contextMenus.create(
-  {"title": "Screenshot on Double Click", "type": "checkbox", "checked" : options.onDoubleClickShot, "onclick":contextMenuDoubleClick});
 
-contextMenus.togglePostSubmit = 
-  chrome.contextMenus.create(
-  {"title": "Log Post Submit", "type": "checkbox", "checked" : options.onPostSubmit, "onclick":contextMenuPostSubmit});
+contextMenus.takeScreenshotNow = createMenu("Take Screenshot Now", downloadScreenshot);
+contextMenus.saveAsMhtmlNow = createMenu("Save as MHTML Now", contextMenuSaveAsMhtml);   
+contextMenus.line = createSeparator();  
+contextMenus.toggleOnScroll = createCheckboxMenu("Screenshot on Scroll", options.onScrollEvent, contextMenuScroll);
+contextMenus.toggleOnResize = createCheckboxMenu("Screenshot on resize", options.onResizeEvent, contextMenuResize);
+contextMenus.toggleOnPageLoad = createCheckboxMenu("Log on Page Load", options.onPageLoad, contextMenuPageLoad);
+contextMenus.togglePostSubmit = createCheckboxMenu("Log Post Submit", options.onPostSubmit, contextMenuPostSubmit);
 
-contextMenus.line2 = 
-  chrome.contextMenus.create(
-    {"type": "separator"});
+contextMenus.toggleOnPageUpdated = createCheckboxMenu("Log on Page Updated", options.onPageUpdated, contextMenuPageUpdated);
+contextMenus.toggleDoubleClick = createCheckboxMenu("Screenshot on Double Click", options.onDoubleClickShot, contextMenuDoubleClick);
 
-contextMenus.showOptionsNow = 
-    chrome.contextMenus.create(
-      {"title": "Options", "type": "normal", "onclick":contextMenuShowOptions}); 
+contextMenus.line2 = createSeparator();
+contextMenus.showOptionsNow = createMenu("Options", contextMenuShowOptions);
 
 
 function contextMenuSaveAsMhtml(){

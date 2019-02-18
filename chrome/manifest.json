@@ -1,6 +1,6 @@
 {
   "name": "Test Observer - The Observatron",
-  "version": "0.6",
+  "version": "0.7",
   "description": "The Observatron observes things in the browser",
   "background": {
     "persistent": true,
