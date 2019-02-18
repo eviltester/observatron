@@ -1,4 +1,3 @@
-// TODO: add observatron options amendment from a right click context menu
 // TODO: when update options, refresh code in each current tab
 
 
