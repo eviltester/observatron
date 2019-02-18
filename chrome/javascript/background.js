@@ -37,6 +37,17 @@ chrome.webRequest.onBeforeRequest.addListener(
   {urls: ["<all_urls>"]},["requestBody"] //"blocking", 
 );
 
+var contextOnPostSubmit = chrome.contextMenus.create(
+  {"title": "Log Post Submit", "type": "checkbox", "checked" : options.onPostSubmit, "onclick":contextMenuPostSubmit});
+
+console.log(contextMenuPostSubmit);  
+
+function contextMenuPostSubmit(){
+  options.onPostSubmit = !options.onPostSubmit;
+  // possibly update the menu
+  chrome.contextMenus.update(contextOnPostSubmit, {"checked" : options.onPostSubmit});
+  changedOptions();
+}
 
 /*
 
@@ -51,6 +62,7 @@ function storageHasChanged(changes, namespace) {
       if(changes["observatron"].newValue.enabled != changes["observatron"].oldValue.enabled){
         toggle_observatron_status();
       }
+      chrome.contextMenus.update(contextOnPostSubmit, {"checked" : options.onPostSubmit});
     }
   }
 }

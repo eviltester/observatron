@@ -29,7 +29,8 @@
     "pageCapture",
     "<all_urls>",
     "storage",
-    "webRequest"
+    "webRequest",
+    "contextMenus"
     ],
   "manifest_version": 2
 }
