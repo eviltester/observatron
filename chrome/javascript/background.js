@@ -39,7 +39,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 // https://developer.chrome.com/extensions/contextMenus
 var contextMenus = {};
-var contextTypes = ["page", "browser_action"];
+var contextTypes = ["all", "page", "browser_action"];
 
 
 function createSeparator(){
@@ -57,8 +57,6 @@ function createCheckboxMenu(title, currentStatus, onclickfunction){
   return chrome.contextMenus.create(
     {"title": title, "type": "checkbox", "checked" : options.onScrollEvent, "contexts": contextTypes, "onclick":onclickfunction});
 }
-
-
 
 contextMenus.takeScreenshotNow = createMenu("Take Screenshot Now", downloadScreenshot);
 contextMenus.saveAsMhtmlNow = createMenu("Save as MHTML Now", contextMenuSaveAsMhtml);   
@@ -111,23 +109,25 @@ function contextMenuDoubleClick(){
 
 function contextMenuHandler(menuName){
 
-  if(menuName==="postsubmit"){
+  switch(menuName){
+    case "postsubmit":
       options.onPostSubmit = !options.onPostSubmit;
-  }
-  if(menuName==="onscroll"){
-    options.onScrollEvent = !options.onScrollEvent;
-  }
-  if(menuName==="onresize"){
-    options.onResizeEvent = !options.onResizeEvent;
-  }
-  if(menuName==="pageload"){
-    options.onPageLoad = !options.onPageLoad;
-  }
-  if(menuName==="pageupdated"){
-    options.onPageUpdated = !options.onPageUpdated;
-  }
-  if(menuName==="ondoubleclick"){
-    options.onDoubleClickShot = !options.onDoubleClickShot;
+      break;
+    case "onscroll":
+      options.onScrollEvent = !options.onScrollEvent;
+      break;
+    case "onresize":
+      options.onResizeEvent = !options.onResizeEvent;
+      break;
+    case "pageload":
+      options.onPageLoad = !options.onPageLoad;
+      break;
+    case "pageupdated":
+      options.onPageUpdated = !options.onPageUpdated;
+      break;
+    case "ondoubleclick":
+     options.onDoubleClickShot = !options.onDoubleClickShot;
+      break;
   }
 
   updateContextMenus();
