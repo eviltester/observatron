@@ -37,16 +37,105 @@ chrome.webRequest.onBeforeRequest.addListener(
   {urls: ["<all_urls>"]},["requestBody"] //"blocking", 
 );
 
-var contextOnPostSubmit = chrome.contextMenus.create(
+var contextMenus = {};
+
+contextMenus.takeScreenshotNow = 
+  chrome.contextMenus.create(
+    {"title": "Take Screenshot Now", "type": "normal", "onclick":downloadScreenshot});
+
+contextMenus.takeScreenshotNow = 
+  chrome.contextMenus.create(
+    {"title": "Save as MHTML Now", "type": "normal", "onclick":contextMenuSaveAsMhtml});
+    
+contextMenus.line = 
+  chrome.contextMenus.create(
+    {"type": "separator"});
+
+contextMenus.toggleOnScroll = 
+  chrome.contextMenus.create(
+  {"title": "Screenshot on Scroll", "type": "checkbox", "checked" : options.onScrollEvent, "onclick":contextMenuScroll});
+
+contextMenus.toggleOnResize = 
+  chrome.contextMenus.create(
+  {"title": "Screenshot on resize", "type": "checkbox", "checked" : options.onResizeEvent, "onclick":contextMenuResize});  
+
+contextMenus.toggleOnPageLoad = 
+  chrome.contextMenus.create(
+  {"title": "Log on Page Load", "type": "checkbox", "checked" : options.onPageLoad, "onclick":contextMenuPageLoad});
+
+contextMenus.toggleOnPageUpdated = 
+  chrome.contextMenus.create(
+  {"title": "Log on Page Updated", "type": "checkbox", "checked" : options.onPageUpdated, "onclick":contextMenuPageUpdated});
+
+contextMenus.toggleDoubleClick = 
+  chrome.contextMenus.create(
+  {"title": "Screenshot on Double Click", "type": "checkbox", "checked" : options.onDoubleClickShot, "onclick":contextMenuDoubleClick});
+
+contextMenus.togglePostSubmit = 
+  chrome.contextMenus.create(
   {"title": "Log Post Submit", "type": "checkbox", "checked" : options.onPostSubmit, "onclick":contextMenuPostSubmit});
 
-console.log(contextMenuPostSubmit);  
+
+function contextMenuSaveAsMhtml(){
+  saveAsMhtml();
+}   
 
 function contextMenuPostSubmit(){
-  options.onPostSubmit = !options.onPostSubmit;
-  // possibly update the menu
-  chrome.contextMenus.update(contextOnPostSubmit, {"checked" : options.onPostSubmit});
+  contextMenuHandler("postsubmit");
+}
+
+function contextMenuPageLoad(){
+  contextMenuHandler("pageload");
+}
+
+function contextMenuPageUpdated(){
+  contextMenuHandler("pageupdated");
+}
+
+function contextMenuScroll(){
+  contextMenuHandler("onscroll");
+}
+
+function contextMenuResize(){
+  contextMenuHandler("onresize");
+}
+
+function contextMenuDoubleClick(){
+  contextMenuHandler("ondoubleclick");
+}
+
+function contextMenuHandler(menuName){
+
+  if(menuName==="postsubmit"){
+      options.onPostSubmit = !options.onPostSubmit;
+  }
+  if(menuName==="onscroll"){
+    options.onScrollEvent = !options.onScrollEvent;
+  }
+  if(menuName==="onresize"){
+    options.onResizeEvent = !options.onResizeEvent;
+  }
+  if(menuName==="pageload"){
+    options.onPageLoad = !options.onPageLoad;
+  }
+  if(menuName==="pageupdated"){
+    options.onPageUpdated = !options.onPageUpdated;
+  }
+  if(menuName==="ondoubleclick"){
+    options.onDoubleClickShot = !options.onDoubleClickShot;
+  }
+
+  updateContextMenus();
   changedOptions();
+}
+
+function updateContextMenus(){
+    chrome.contextMenus.update(contextMenus.togglePostSubmit, {"checked" : options.onPostSubmit});
+    chrome.contextMenus.update(contextMenus.toggleOnScroll, {"checked" : options.onScrollEvent});
+    chrome.contextMenus.update(contextMenus.toggleOnResize, {"checked" : options.onResizeEvent});
+    chrome.contextMenus.update(contextMenus.toggleOnPageLoad, {"checked" : options.onPageLoad});
+    chrome.contextMenus.update(contextMenus.toggleOnPageUpdated, {"checked" : options.onPageUpdated});
+    chrome.contextMenus.update(contextMenus.toggleDoubleClick, {"checked" : options.onDoubleClickShot});
 }
 
 /*
@@ -62,7 +151,7 @@ function storageHasChanged(changes, namespace) {
       if(changes["observatron"].newValue.enabled != changes["observatron"].oldValue.enabled){
         toggle_observatron_status();
       }
-      chrome.contextMenus.update(contextOnPostSubmit, {"checked" : options.onPostSubmit});
+      updateContextMenus();
     }
   }
 }
@@ -256,7 +345,7 @@ function getCurrentTab(){
 
 function saveAsMhtml(anId){
 
-  if(anId == undefined){   
+  if(anId === undefined){   
       getCurrentTab().then(function(tab){
         chrome.pageCapture.saveAsMHTML({tabId: tab.id}, downloadMHTML);
       });
@@ -267,10 +356,6 @@ function saveAsMhtml(anId){
 }
 
 function downloadMHTML(mhtmlData){
-
-  if(!isObservatronEngaged()){
-    return;
-  }
 
   var downloadFileName = getFileName(options.filepath, options.fileprefix, "mhtmldata", "mhtml");
 
