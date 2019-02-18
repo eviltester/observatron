@@ -37,111 +37,10 @@ chrome.webRequest.onBeforeRequest.addListener(
   {urls: ["<all_urls>"]},["requestBody"] //"blocking", 
 );
 
-// https://developer.chrome.com/extensions/contextMenus
-var contextMenus = {};
-var contextTypes = ["all", "page", "browser_action"];
-
-
-function createSeparator(){
-  // since there is a limit to the number of options in the browser top level item, do not include separators in that menu
-  // console.log(chrome.contextMenus.ACTION_MENU_TOP_LEVEL_LIMIT);
-  return chrome.contextMenus.create({"type": "separator", "contexts": ["page"]}); 
-}
-
-function createMenu(title, onclickfunction){
-  return chrome.contextMenus.create(
-    {"title": title, "type": "normal", "contexts": contextTypes, "onclick":onclickfunction});
-}
-
-function createCheckboxMenu(title, currentStatus, onclickfunction){
-  return chrome.contextMenus.create(
-    {"title": title, "type": "checkbox", "checked" : options.onScrollEvent, "contexts": contextTypes, "onclick":onclickfunction});
-}
-
-contextMenus.takeScreenshotNow = createMenu("Take Screenshot Now", downloadScreenshot);
-contextMenus.saveAsMhtmlNow = createMenu("Save as MHTML Now", contextMenuSaveAsMhtml);   
-contextMenus.line = createSeparator();  
-contextMenus.toggleOnScroll = createCheckboxMenu("Screenshot on Scroll", options.onScrollEvent, contextMenuScroll);
-contextMenus.toggleOnResize = createCheckboxMenu("Screenshot on resize", options.onResizeEvent, contextMenuResize);
-contextMenus.toggleOnPageLoad = createCheckboxMenu("Log on Page Load", options.onPageLoad, contextMenuPageLoad);
-contextMenus.togglePostSubmit = createCheckboxMenu("Log Post Submit", options.onPostSubmit, contextMenuPostSubmit);
-
-contextMenus.toggleOnPageUpdated = createCheckboxMenu("Log on Page Updated", options.onPageUpdated, contextMenuPageUpdated);
-contextMenus.toggleDoubleClick = createCheckboxMenu("Screenshot on Double Click", options.onDoubleClickShot, contextMenuDoubleClick);
-
-contextMenus.line2 = createSeparator();
-contextMenus.showOptionsNow = createMenu("Options", contextMenuShowOptions);
-
-
-function contextMenuSaveAsMhtml(){
-  saveAsMhtml();
-}   
-
-function contextMenuShowOptions(){
-  chrome.tabs.create({url:"options/options_page.html"});
-}  
-
-
-
-function contextMenuPostSubmit(){
-  contextMenuHandler("postsubmit");
-}
-
-function contextMenuPageLoad(){
-  contextMenuHandler("pageload");
-}
-
-function contextMenuPageUpdated(){
-  contextMenuHandler("pageupdated");
-}
-
-function contextMenuScroll(){
-  contextMenuHandler("onscroll");
-}
-
-function contextMenuResize(){
-  contextMenuHandler("onresize");
-}
-
-function contextMenuDoubleClick(){
-  contextMenuHandler("ondoubleclick");
-}
-
-function contextMenuHandler(menuName){
-
-  switch(menuName){
-    case "postsubmit":
-      options.onPostSubmit = !options.onPostSubmit;
-      break;
-    case "onscroll":
-      options.onScrollEvent = !options.onScrollEvent;
-      break;
-    case "onresize":
-      options.onResizeEvent = !options.onResizeEvent;
-      break;
-    case "pageload":
-      options.onPageLoad = !options.onPageLoad;
-      break;
-    case "pageupdated":
-      options.onPageUpdated = !options.onPageUpdated;
-      break;
-    case "ondoubleclick":
-     options.onDoubleClickShot = !options.onDoubleClickShot;
-      break;
-  }
-
-  updateContextMenus();
-  changedOptions();
-}
-
-function updateContextMenus(){
-    chrome.contextMenus.update(contextMenus.togglePostSubmit, {"checked" : options.onPostSubmit});
-    chrome.contextMenus.update(contextMenus.toggleOnScroll, {"checked" : options.onScrollEvent});
-    chrome.contextMenus.update(contextMenus.toggleOnResize, {"checked" : options.onResizeEvent});
-    chrome.contextMenus.update(contextMenus.toggleOnPageLoad, {"checked" : options.onPageLoad});
-    chrome.contextMenus.update(contextMenus.toggleOnPageUpdated, {"checked" : options.onPageUpdated});
-    chrome.contextMenus.update(contextMenus.toggleDoubleClick, {"checked" : options.onDoubleClickShot});
-}
+// context menu
+var contextMenus = new ContextMenus();
+contextMenus.init(downloadScreenshot, saveAsMhtml, options);
+contextMenus.createMenus();
 
 /*
 
@@ -156,7 +55,7 @@ function storageHasChanged(changes, namespace) {
       if(changes["observatron"].newValue.enabled != changes["observatron"].oldValue.enabled){
         toggle_observatron_status();
       }
-      updateContextMenus();
+      contextMenus.updateContextMenus();
     }
   }
 }
@@ -164,6 +63,7 @@ function storageHasChanged(changes, namespace) {
 function changedOptions(){
   chrome.storage.local.set({observatron: options});
 }
+
 
 
 

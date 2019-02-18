@@ -6,6 +6,7 @@
     "persistent": true,
     "scripts": [
                 "javascript/observatron_options.js",
+                "javascript/context_menu.js",
                 "javascript/filenames.js",
                 "javascript/background.js"
               ]
