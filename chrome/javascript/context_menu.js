@@ -47,8 +47,9 @@ function ContextMenus(){
             contextMenus.toggleDoubleClick = createCheckboxMenu("Screenshot on Double Click", options.onDoubleClickShot, contextMenus.screenshots);
         contextMenus.log = createParentMenu("Log");  
             contextMenus.toggleOnPageLoad = createCheckboxMenu("on Page Load", options.onPageLoad, contextMenus.log);
-            contextMenus.togglePostSubmit = createCheckboxMenu("on Post Submit", options.onPostSubmit, contextMenus.log);
-            contextMenus.toggleOnPageUpdated = createCheckboxMenu("on Page Updated", options.onPageUpdated, contextMenus.log);            
+            contextMenus.toggleOnPageUpdated = createCheckboxMenu("on Page Updated", options.onPageUpdated, contextMenus.log);           
+            contextMenus.togglePostSubmit = createCheckboxMenu("POST form contents to a file", options.onPostSubmit, contextMenus.log);
+             
         contextMenus.line2 = createSeparator();
         contextMenus.showOptionsNow = createMenu("Options", contextMenuShowOptions);
 
