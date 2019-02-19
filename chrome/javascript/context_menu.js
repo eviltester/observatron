@@ -18,7 +18,7 @@ function ContextMenus(){
         {"type": "separator", "contexts": ["page"]}); 
     }
 
-    function createMenu(title, onclickfunction){
+    function createMenu(title){
         return chrome.contextMenus.create(
             {"title": title, "type": "normal", "contexts": contextTypes});
     }
@@ -28,7 +28,7 @@ function ContextMenus(){
             {"title": title, "type": "normal", "contexts": contextTypes});
     }
 
-    function createCheckboxMenu(title, currentStatus, onclickfunction, parent){
+    function createCheckboxMenu(title, currentStatus, parent){
         var menuDetails = {"title": title, "type": "checkbox", "checked" : currentStatus, "contexts": contextTypes};
         if(parent !== undefined){
             menuDetails.parentId = parent;
@@ -38,17 +38,17 @@ function ContextMenus(){
 
     this.createMenus = function(){
 
-        contextMenus.takeScreenshotNow = createMenu("Take Screenshot Now", downloadScreenshot);
-        contextMenus.saveAsMhtmlNow = createMenu("Save as MHTML Now", contextMenuSaveAsMhtml);   
+        contextMenus.takeScreenshotNow = createMenu("Take Screenshot Now");
+        contextMenus.saveAsMhtmlNow = createMenu("Save as MHTML Now");   
         contextMenus.line = createSeparator();
         contextMenus.screenshots = createParentMenu("Screenshot");  
-            contextMenus.toggleOnScroll = createCheckboxMenu("on Scroll", options.onScrollEvent, contextMenuScroll, contextMenus.screenshots);
-            contextMenus.toggleOnResize = createCheckboxMenu("on resize", options.onResizeEvent, contextMenuResize, contextMenus.screenshots);
-            contextMenus.toggleDoubleClick = createCheckboxMenu("Screenshot on Double Click", options.onDoubleClickShot, contextMenuDoubleClick, contextMenus.screenshots);
+            contextMenus.toggleOnScroll = createCheckboxMenu("on Scroll", options.onScrollEvent, contextMenus.screenshots);
+            contextMenus.toggleOnResize = createCheckboxMenu("on resize", options.onResizeEvent, contextMenus.screenshots);
+            contextMenus.toggleDoubleClick = createCheckboxMenu("Screenshot on Double Click", options.onDoubleClickShot, contextMenus.screenshots);
         contextMenus.log = createParentMenu("Log");  
-            contextMenus.toggleOnPageLoad = createCheckboxMenu("on Page Load", options.onPageLoad, contextMenuPageLoad, contextMenus.log);
-            contextMenus.togglePostSubmit = createCheckboxMenu("on Post Submit", options.onPostSubmit, contextMenuPostSubmit, contextMenus.log);
-            contextMenus.toggleOnPageUpdated = createCheckboxMenu("on Page Updated", options.onPageUpdated, contextMenuPageUpdated, contextMenus.log);            
+            contextMenus.toggleOnPageLoad = createCheckboxMenu("on Page Load", options.onPageLoad, contextMenus.log);
+            contextMenus.togglePostSubmit = createCheckboxMenu("on Post Submit", options.onPostSubmit, contextMenus.log);
+            contextMenus.toggleOnPageUpdated = createCheckboxMenu("on Page Updated", options.onPageUpdated, contextMenus.log);            
         contextMenus.line2 = createSeparator();
         contextMenus.showOptionsNow = createMenu("Options", contextMenuShowOptions);
 
