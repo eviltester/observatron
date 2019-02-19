@@ -205,20 +205,20 @@ function configuredOnPageLoad(anObject){
 
 function configuredOnPageUpdated(tabId, changeInfo, tab){
 
+  // https://developer.chrome.com/extensions/tabs#event-onUpdated
   if(!isObservatronEngaged()){
     return;
   }
 
   if(options.onPageUpdated){
 
-    //console.log("page updated");
+    if(changeInfo.hasOwnProperty("url")){
+      downloadAsLog( "url", changeInfo, "url");
+    }
 
     if (changeInfo.status == 'complete') {
-
-      downloadAsLog( "url", anObject, "url");
       saveAsMhtml(tabId);
       takeScreenshotIfWeCareAboutPage(); 
-
     }
   }
 }
