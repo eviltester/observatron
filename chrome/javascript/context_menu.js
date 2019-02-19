@@ -2,7 +2,6 @@
 
 function ContextMenus(){
 
-
     contextMenus = {};
     contextTypes = ["all", "page", "browser_action"];
 
@@ -21,7 +20,7 @@ function ContextMenus(){
 
     function createMenu(title, onclickfunction){
         return chrome.contextMenus.create(
-            {"title": title, "type": "normal", "contexts": contextTypes, "onclick":onclickfunction});
+            {"title": title, "type": "normal", "contexts": contextTypes});
     }
 
     function createParentMenu(title){
@@ -30,7 +29,7 @@ function ContextMenus(){
     }
 
     function createCheckboxMenu(title, currentStatus, onclickfunction, parent){
-        var menuDetails = {"title": title, "type": "checkbox", "checked" : currentStatus, "contexts": contextTypes, "onclick": onclickfunction};
+        var menuDetails = {"title": title, "type": "checkbox", "checked" : currentStatus, "contexts": contextTypes};
         if(parent !== undefined){
             menuDetails.parentId = parent;
         }
@@ -52,69 +51,50 @@ function ContextMenus(){
             contextMenus.toggleOnPageUpdated = createCheckboxMenu("on Page Updated", options.onPageUpdated, contextMenuPageUpdated, contextMenus.log);            
         contextMenus.line2 = createSeparator();
         contextMenus.showOptionsNow = createMenu("Options", contextMenuShowOptions);
+
+        chrome.contextMenus.onClicked.addListener(contextMenuClickHandler);
     }
 
+    function contextMenuClickHandler(info, tab){
 
-    function contextMenuSaveAsMhtml(){
-    saveAsMhtml();
-    }   
-
-    function contextMenuShowOptions(){
-    chrome.tabs.create({url:"options/options_page.html"});
-    }  
-
-
-
-    function contextMenuPostSubmit(){
-    contextMenuHandler("postsubmit");
-    }
-
-    function contextMenuPageLoad(){
-    contextMenuHandler("pageload");
-    }
-
-    function contextMenuPageUpdated(){
-    contextMenuHandler("pageupdated");
-    }
-
-    function contextMenuScroll(){
-    contextMenuHandler("onscroll");
-    }
-
-    function contextMenuResize(){
-    contextMenuHandler("onresize");
-    }
-
-    function contextMenuDoubleClick(){
-    contextMenuHandler("ondoubleclick");
-    }
-
-    function contextMenuHandler(menuName){
-
-        switch(menuName){
-            case "postsubmit":
-            options.onPostSubmit = !options.onPostSubmit;
-            break;
-            case "onscroll":
-            options.onScrollEvent = !options.onScrollEvent;
-            break;
-            case "onresize":
-            options.onResizeEvent = !options.onResizeEvent;
-            break;
-            case "pageload":
-            options.onPageLoad = !options.onPageLoad;
-            break;
-            case "pageupdated":
-            options.onPageUpdated = !options.onPageUpdated;
-            break;
-            case "ondoubleclick":
-            options.onDoubleClickShot = !options.onDoubleClickShot;
-            break;
+        switch(info.menuItemId){
+            case contextMenus.takeScreenshotNow:
+                downloadScreenshot();
+                return;
+            case contextMenus.saveAsMhtmlNow:
+                saveAsMhtml();
+                return;
+            case contextMenus.showOptionsNow:
+                contextMenuShowOptions();
+                return;
+            case contextMenus.togglePostSubmit:
+                options.onPostSubmit = !options.onPostSubmit;
+                break;
+            case contextMenus.toggleOnScroll:
+                options.onScrollEvent = !options.onScrollEvent;
+                break;
+            case contextMenus.toggleOnResize:
+                options.onResizeEvent = !options.onResizeEvent;
+                break;
+            case contextMenus.toggleOnPageLoad :
+                options.onPageLoad = !options.onPageLoad;
+                break;
+            case contextMenus.toggleOnPageUpdated:
+                options.onPageUpdated = !options.onPageUpdated;
+                break;
+            case contextMenus.toggleDoubleClick:
+                options.onDoubleClickShot = !options.onDoubleClickShot;
+                break;
         }
 
         updateTheContextMenus();
         changedOptions();
     }
+
+    function contextMenuShowOptions(){
+        chrome.tabs.create({url:"options/options_page.html"});
+    }  
+
 
     function updateTheContextMenus(){
         chrome.contextMenus.update(contextMenus.togglePostSubmit, {"checked" : options.onPostSubmit});
