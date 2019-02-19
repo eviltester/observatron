@@ -6,7 +6,7 @@ This is an under-development Chrome plugin.
 
 To install:
 
-- download the files
+- download the files from [releases](https://github.com/eviltester/observatron/releases)
 - visit chrome://extensions
 - switch on Developer mode
 - Load unpacked
@@ -15,7 +15,6 @@ To install:
 To use:
 
 - Click the red button [Engage the Observatron] to start
-- you might need to refresh the page at the moment
 - the button will turn green
 - Click the green button [Disengage the observatron] to finish
 
@@ -43,7 +42,24 @@ If you right click on the icon and choose options then you can configure the ext
 
 You can also configure the folder (within dowloads to save the files e.g. change it to match the feature you are testing). Also the file prefix. And the timeouts the system uses for checking if you are still scrolling or still resizing.
 
-Work in progress.
+---
+
+## Context Menu
+
+The context menu provides access to instant screenshot or .mhtml saving, and allows you to toggle on and off the checkbox options.
+
+(You still need to use the options screen to change output paths and timings)
+
+![](release/menu-screenshot-640-400.png)
+
+---
+
+## Options Screen
+
+The options screen, right click from context menu or manage from `chrome://extensions`
+
+![](release/options-screenshot-1280x800.png)
+
 
 ---
 
@@ -53,6 +69,8 @@ Copyright 2019 Compendium Developments Ltd, Alan Richardson
 https://eviltester.com
 https://compendiumdev.co.uk
 
+
+---
 
 ## Detailed Description
 
