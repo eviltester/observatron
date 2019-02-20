@@ -39,7 +39,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 // context menu
 var contextMenus = new ContextMenus();
-contextMenus.init(downloadScreenshot, saveAsMhtml, options);
+contextMenus.init(downloadScreenshot, saveAsMhtml, options, logANote);
 contextMenus.createMenus();
 
 /*
@@ -237,8 +237,67 @@ function getCurrentTab(){
   });
 }
 
+function logANote(){
+  // simple note taking experiment
+  var noteText = window.prompt("Add Note to log \n(? question, ! bug, - todo, @customtype)","");
+  var withScreenshot = false;
+  var noteId = Math.floor(Date.now());
 
+  if(noteText != null){
 
+    withScreenshot = window.confirm("Do you want a screenshot with that?");
+    
+    // is it a special note?
+    // ? question
+    // ! bug
+    // - todo
+    // @type
+
+    noteToLog = getSpecialNoteTypeFromString(noteText);
+    noteToLog.id = noteId.toString();
+
+    // TODO store screenshot name in the note as a screenshot property
+    downloadAsLog(noteToLog.type+"_"+noteToLog.id, noteToLog);
+    if(withScreenshot){
+      downloadScreenshot("_note_" + noteToLog.id);
+    }
+  }
+}
+
+function getSpecialNoteTypeFromString(theString){
+  var specialNote = "note";
+  var noteText = theString;
+
+  var firstChar = noteText.substring(0,1);
+
+  switch(firstChar){
+    case "?":
+      specialNote = "question";
+      noteText = noteText.substring(1);
+      break;
+    case "!":
+      specialNote = "bug";
+      noteText = noteText.substring(1);
+      break;
+    case "-":
+      specialNote = "todo";
+      noteText = noteText.substring(1);
+      break;
+    case "@":
+
+      var words = noteText.split(" ");
+      var specialConfig = words[0].substring(1);
+      if(specialConfig.length>0){
+        specialNote= specialConfig;
+      }
+      noteText = noteText.substring(words[0].length);
+      // TODO filter custom words so that they are suitable as filename portions
+  }
+
+  noteText = noteText.trim();
+
+  return {type: specialNote, text: noteText};
+}
 
 
 /*
@@ -360,7 +419,7 @@ function takeScreenshotIfWeCareAboutPage(){
       });
 }
 
-function downloadScreenshot(){
+function downloadScreenshot(additionalPrefix){
 
     chrome.tabs.captureVisibleTab(function(screenshotUrl) {
 
@@ -368,12 +427,8 @@ function downloadScreenshot(){
           console.log("screenshotUrl is undefined");
             // https://stackoverflow.com/questions/28431505/unchecked-runtime-lasterror-when-using-chrome-api
             if(chrome.runtime.lastError) {
-                    // Something went wrong
-                    console.warn("An error occurred in capture visible tab " + chrome.runtime.lastError.message);
-                    // Maybe explain that to the user too?
-                  } else {
-                    // No errors, you can use entry
-                  }
+                console.warn("An error occurred in capture visible tab " + chrome.runtime.lastError.message);
+            }
           return;
         }
 
@@ -388,9 +443,21 @@ function downloadScreenshot(){
 
         //console.log(screenshotUrl);
 
-        var dimensions = "-" + width + "x" + height;
+        // sometimes we don't get the width height, so if that happens don't write out the width height
 
-        var downloadFileName = getFileName(options.filepath, options.fileprefix, "screenshot"+dimensions, "jpg");
+
+        var dimensions = "";
+        
+        if(width !== undefined && height !== undefined){
+          dimensions = "-" + width + "x" + height;
+        }
+        
+        var relatedPrefix = "";  // is this screenshot related to something?
+        if(additionalPrefix!==undefined){
+            relatedPrefix = additionalPrefix;
+        }
+
+        var downloadFileName = getFileName(options.filepath, options.fileprefix, "screenshot"+dimensions+relatedPrefix, "jpg");
 
 
         chrome.downloads.download(

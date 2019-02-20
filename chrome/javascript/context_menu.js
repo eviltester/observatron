@@ -5,6 +5,7 @@ function ContextMenus(){
     contextMenus = {};
     contextTypes = ["all", "page", "browser_action"];
 
+    // BUG - don't seem to be passing in functions seems to use globals from background.js, which works, but was not as intended
     this.init = function(downloadScreenshotFunction, saveAsMhtmlFunction, options){
         this.saveAsMhtml = saveAsMhtmlFunction;
         this.options = options;
@@ -39,7 +40,8 @@ function ContextMenus(){
     this.createMenus = function(){
 
         contextMenus.takeScreenshotNow = createMenu("Take Screenshot Now");
-        contextMenus.saveAsMhtmlNow = createMenu("Save as MHTML Now");   
+        contextMenus.saveAsMhtmlNow = createMenu("Save as MHTML Now");
+        contextMenus.logNote = createMenu("Take Note"); 
         contextMenus.line = createSeparator();
         contextMenus.screenshots = createParentMenu("Screenshot");  
             contextMenus.toggleOnScroll = createCheckboxMenu("on Scroll", options.onScrollEvent, contextMenus.screenshots);
@@ -49,7 +51,8 @@ function ContextMenus(){
             contextMenus.toggleOnPageLoad = createCheckboxMenu("on Page Load", options.onPageLoad, contextMenus.log);
             contextMenus.toggleOnPageUpdated = createCheckboxMenu("on Page Updated", options.onPageUpdated, contextMenus.log);           
             contextMenus.togglePostSubmit = createCheckboxMenu("POST form contents to a file", options.onPostSubmit, contextMenus.log);
-             
+        //contextMenus.note = createParentMenu("Note");
+            
         contextMenus.line2 = createSeparator();
         contextMenus.showOptionsNow = createMenu("Options", contextMenuShowOptions);
 
@@ -67,6 +70,9 @@ function ContextMenus(){
                 return;
             case contextMenus.showOptionsNow:
                 contextMenuShowOptions();
+                return;
+            case contextMenus.logNote:
+                logANote();
                 return;
             case contextMenus.togglePostSubmit:
                 options.onPostSubmit = !options.onPostSubmit;
