@@ -37,9 +37,14 @@ chrome.webRequest.onBeforeRequest.addListener(
   {urls: ["<all_urls>"]},["requestBody"] //"blocking", 
 );
 
+// https://developer.chrome.com/extensions/commands
+chrome.commands.onCommand.addListener(function(command) {
+  commandHandler(command);
+});
+
 // context menu
 var contextMenus = new ContextMenus();
-contextMenus.init(downloadScreenshot, saveAsMhtml, options, logANote);
+contextMenus.init(downloadScreenshot, saveAsMhtml, options);
 contextMenus.createMenus();
 
 /*
@@ -235,6 +240,14 @@ function getCurrentTab(){
       resolve(tabs[0]);
     });
   });
+}
+
+function commandHandler(command){
+  if(command === "log-a-note"){
+    logANote();
+  }else{
+    console.log("unexpected command " + command);
+  }
 }
 
 function logANote(){

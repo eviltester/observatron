@@ -11,6 +11,15 @@
                 "javascript/background.js"
               ]
   },
+  "commands": {
+    "log-a-note": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L",
+        "mac": "Command+Shift+L"
+      },
+      "description": "log a note"
+    }
+  },
   "browser_action": {
     "default_icon": "icons/red.png",
     "default_title": "Engage The Observatron"
