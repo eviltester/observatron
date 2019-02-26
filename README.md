@@ -132,9 +132,12 @@ https://compendiumdev.co.uk
 
 ## Detailed Description
 
-The Observatron supports Exploratory testing by taking screenshots and creating .mhtml files as you test. It also logs urls and form submissions.
+The Observatron supports Exploratory testing by taking screenshots and creating .mhtml files as you test. It also logs urls and form submissions. All logging is performed in your downloads folder so that you have control over the information. No information is sent to external servers.
+
+Logging and screenshots saved when:
 
 - when a page loads
+- when a page updates
 - when you double click on the page
 - when you resize the page
 - when you scroll through the page
@@ -143,6 +146,26 @@ The Observatron supports Exploratory testing by taking screenshots and creating 
 All of the above can be switched on and off from the options.
 
 All images are stored in your downloads folder so you can easily find them and see them being saved.
+
+You can also save logs of: bugs, todos, questions, or any custom information. To do this:
+
+- from the context menu choose "Take Note"
+- in the dialog, write your note
+- you will be asked if you want a screenshot with that
+- the note and optional screenshot will be saved to your downloads
+
+Notes take the format:
+
+- "? question text to output as the note"
+- "! description of the bug to output as the note"
+- "- todo text to output"
+- "@type text to output as custom type"
+
+When you save a screenshot with the note screenshot it will have `_note_noteid` at the end of the filename. This can help you cross reference screenshots to notes, although the timestamping should mean that the screenshot is the next file saved after the note.
+
+e.g. "obs_2019-02-20-11-32-57-314-screenshot-1201x1104_note_1550662375417.jpg"
+
+
 
 Copyright 2019 Compendium Developments Ltd, Alan Richardson
 
