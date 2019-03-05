@@ -4,7 +4,11 @@ A prototype exploratory testing observation tool for Chrome browser.
 
 This is an under-development Chrome plugin.
 
-To install:
+You can download this from the Chrome Store:
+
+- [The Observatron Chrome Store Page](https://chrome.google.com/webstore/detail/test-observer-the-observa/gdiemnbjpblghfbejnbohdnnmodbknoe)
+
+To self-install from source:
 
 - download the files from [releases](https://github.com/eviltester/observatron/releases)
 - visit [chrome://extensions](chrome://extensions)
@@ -165,9 +169,7 @@ When you save a screenshot with the note screenshot it will have `_note_noteid` 
 
 e.g. "obs_2019-02-20-11-32-57-314-screenshot-1201x1104_note_1550662375417.jpg"
 
-
+This extension is open source.
 
 Copyright 2019 Compendium Developments Ltd, Alan Richardson
 
-https://eviltester.com
-https://compendiumdev.co.uk
