@@ -90,6 +90,13 @@ function changedOptions(){
 //https://github.com/NV/chrome-o-tile/blob/master/chrome/background.js
 function requested(request, sender, sendResponse){
 
+  // Handle saveNote regardless of engagement status
+  if (request.method === 'saveNote') {
+    saveNoteFromMessage(request.noteText, request.withScreenshot);
+    sendResponse({success: true});
+    return true; // Keep the message channel open for async response
+  }
+
   if(!isObservatronEngaged()){
     return false;
   }
@@ -113,12 +120,6 @@ function requested(request, sender, sendResponse){
       console.log("shot on scrolled");
       takeScreenshotIfWeCareAboutPage();
     }
-  }
-
-  if (request.method === 'saveNote') {
-    saveNoteFromMessage(request.noteText, request.withScreenshot);
-    sendResponse({success: true});
-    return true; // Keep the message channel open for async response
   }
 
   return false;

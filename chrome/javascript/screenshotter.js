@@ -11,6 +11,23 @@ var dblClickTimeout = {timeout: 0, milliseconds: 0, messageName: "screenshotdbl"
   SETUP THE DEFAULTS FROM THE OBSERVATRON
 */
 
+var isObservatronEngaged = false;
+
+chrome.storage.onChanged.addListener(function(changes, namespace) {
+  if(namespace === "local"){
+    if(changes.hasOwnProperty("observatron")){
+      isObservatronEngaged = changes["observatron"].newValue.engaged;
+    }
+  }
+});
+
+chrome.storage.local.get(['observatron'], function(result) {
+  if (result.observatron) {
+    isObservatronEngaged = result.observatron.engaged;
+  }
+});
+
+// Keep the original call for screenshotter settings
 chrome.storage.local.get(['observatron_screenshotter'], setObservatronDefaults);
 
 
@@ -56,7 +73,7 @@ function sendAMessageWhenTimeoutComplete( timeoutVariable){
 }
 
 function sendAMessage( timeoutVariable){
-  if(chrome.runtime!=undefined && chrome.runtime.sendMessage){
+  if(isObservatronEngaged && chrome.runtime!=undefined && chrome.runtime.sendMessage){
     try {
       chrome.runtime.sendMessage({method: timeoutVariable.messageName});
       console.log(timeoutVariable.messageName + " sent");
