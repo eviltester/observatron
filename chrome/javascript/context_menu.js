@@ -12,25 +12,25 @@ function ContextMenus(){
         this.downloadScreenshot = downloadScreenshotFunction;
     }
 
-    function createSeparator(){
+    function createSeparator(id){
     // since there is a limit to the number of options in the browser top level item, do not include separators in that menu
     // console.log(chrome.contextMenus.ACTION_MENU_TOP_LEVEL_LIMIT);
     return chrome.contextMenus.create(
-        {"type": "separator", "contexts": ["page"]}); 
+        {"id": id, "type": "separator", "contexts": ["page"]});
     }
 
-    function createMenu(title){
+    function createMenu(id, title){
         return chrome.contextMenus.create(
-            {"title": title, "type": "normal", "contexts": contextTypes});
+            {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
     }
 
-    function createParentMenu(title){
+    function createParentMenu(id, title){
         return chrome.contextMenus.create(
-            {"title": title, "type": "normal", "contexts": contextTypes});
+            {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
     }
 
-    function createCheckboxMenu(title, currentStatus, parent){
-        var menuDetails = {"title": title, "type": "checkbox", "checked" : currentStatus, "contexts": contextTypes};
+    function createCheckboxMenu(id, title, currentStatus, parent){
+        var menuDetails = {"id": id, "title": title, "type": "checkbox", "checked" : currentStatus, "contexts": contextTypes};
         if(parent !== undefined){
             menuDetails.parentId = parent;
         }
@@ -39,22 +39,22 @@ function ContextMenus(){
 
     this.createMenus = function(){
 
-        contextMenus.takeScreenshotNow = createMenu("Take Screenshot Now");
-        contextMenus.saveAsMhtmlNow = createMenu("Save as MHTML Now");
-        contextMenus.logNote = createMenu("Take Note"); 
-        contextMenus.line = createSeparator();
-        contextMenus.screenshots = createParentMenu("Screenshot");  
-            contextMenus.toggleOnScroll = createCheckboxMenu("on Scroll", options.onScrollEvent, contextMenus.screenshots);
-            contextMenus.toggleOnResize = createCheckboxMenu("on resize", options.onResizeEvent, contextMenus.screenshots);
-            contextMenus.toggleDoubleClick = createCheckboxMenu("Screenshot on Double Click", options.onDoubleClickShot, contextMenus.screenshots);
-        contextMenus.log = createParentMenu("Log");  
-            contextMenus.toggleOnPageLoad = createCheckboxMenu("on Page Load", options.onPageLoad, contextMenus.log);
-            contextMenus.toggleOnPageUpdated = createCheckboxMenu("on Page Updated", options.onPageUpdated, contextMenus.log);           
-            contextMenus.togglePostSubmit = createCheckboxMenu("POST form contents to a file", options.onPostSubmit, contextMenus.log);
+        contextMenus.takeScreenshotNow = createMenu("takeScreenshotNow", "Take Screenshot Now");
+        contextMenus.saveAsMhtmlNow = createMenu("saveAsMhtmlNow", "Save as MHTML Now");
+        contextMenus.logNote = createMenu("logNote", "Take Note");
+        contextMenus.line = createSeparator("separator1");
+        contextMenus.screenshots = createParentMenu("screenshots", "Screenshot");
+            contextMenus.toggleOnScroll = createCheckboxMenu("toggleOnScroll", "on Scroll", options.onScrollEvent, contextMenus.screenshots);
+            contextMenus.toggleOnResize = createCheckboxMenu("toggleOnResize", "on resize", options.onResizeEvent, contextMenus.screenshots);
+            contextMenus.toggleDoubleClick = createCheckboxMenu("toggleDoubleClick", "Screenshot on Double Click", options.onDoubleClickShot, contextMenus.screenshots);
+        contextMenus.log = createParentMenu("log", "Log");
+            contextMenus.toggleOnPageLoad = createCheckboxMenu("toggleOnPageLoad", "on Page Load", options.onPageLoad, contextMenus.log);
+            contextMenus.toggleOnPageUpdated = createCheckboxMenu("toggleOnPageUpdated", "on Page Updated", options.onPageUpdated, contextMenus.log);
+            contextMenus.togglePostSubmit = createCheckboxMenu("togglePostSubmit", "POST form contents to a file", options.onPostSubmit, contextMenus.log);
         //contextMenus.note = createParentMenu("Note");
-            
-        contextMenus.line2 = createSeparator();
-        contextMenus.showOptionsNow = createMenu("Options", contextMenuShowOptions);
+
+        contextMenus.line2 = createSeparator("separator2");
+        contextMenus.showOptionsNow = createMenu("showOptionsNow", "Options");
 
         chrome.contextMenus.onClicked.addListener(contextMenuClickHandler);
     }
@@ -62,34 +62,34 @@ function ContextMenus(){
     function contextMenuClickHandler(info, tab){
 
         switch(info.menuItemId){
-            case contextMenus.takeScreenshotNow:
+            case "takeScreenshotNow":
                 downloadScreenshot();
                 return;
-            case contextMenus.saveAsMhtmlNow:
+            case "saveAsMhtmlNow":
                 saveAsMhtml();
                 return;
-            case contextMenus.showOptionsNow:
+            case "showOptionsNow":
                 contextMenuShowOptions();
                 return;
-            case contextMenus.logNote:
+            case "logNote":
                 logANote();
                 return;
-            case contextMenus.togglePostSubmit:
+            case "togglePostSubmit":
                 options.onPostSubmit = !options.onPostSubmit;
                 break;
-            case contextMenus.toggleOnScroll:
+            case "toggleOnScroll":
                 options.onScrollEvent = !options.onScrollEvent;
                 break;
-            case contextMenus.toggleOnResize:
+            case "toggleOnResize":
                 options.onResizeEvent = !options.onResizeEvent;
                 break;
-            case contextMenus.toggleOnPageLoad :
+            case "toggleOnPageLoad":
                 options.onPageLoad = !options.onPageLoad;
                 break;
-            case contextMenus.toggleOnPageUpdated:
+            case "toggleOnPageUpdated":
                 options.onPageUpdated = !options.onPageUpdated;
                 break;
-            case contextMenus.toggleDoubleClick:
+            case "toggleDoubleClick":
                 options.onDoubleClickShot = !options.onDoubleClickShot;
                 break;
         }
@@ -104,12 +104,12 @@ function ContextMenus(){
 
 
     function updateTheContextMenus(){
-        chrome.contextMenus.update(contextMenus.togglePostSubmit, {"checked" : options.onPostSubmit});
-        chrome.contextMenus.update(contextMenus.toggleOnScroll, {"checked" : options.onScrollEvent});
-        chrome.contextMenus.update(contextMenus.toggleOnResize, {"checked" : options.onResizeEvent});
-        chrome.contextMenus.update(contextMenus.toggleOnPageLoad, {"checked" : options.onPageLoad});
-        chrome.contextMenus.update(contextMenus.toggleOnPageUpdated, {"checked" : options.onPageUpdated});
-        chrome.contextMenus.update(contextMenus.toggleDoubleClick, {"checked" : options.onDoubleClickShot});
+        chrome.contextMenus.update("togglePostSubmit", {"checked" : options.onPostSubmit});
+        chrome.contextMenus.update("toggleOnScroll", {"checked" : options.onScrollEvent});
+        chrome.contextMenus.update("toggleOnResize", {"checked" : options.onResizeEvent});
+        chrome.contextMenus.update("toggleOnPageLoad", {"checked" : options.onPageLoad});
+        chrome.contextMenus.update("toggleOnPageUpdated", {"checked" : options.onPageUpdated});
+        chrome.contextMenus.update("toggleDoubleClick", {"checked" : options.onDoubleClickShot});
     }
 
     this.updateContextMenus = function(){

@@ -1,6 +1,8 @@
 // TODO: when update options, refresh code in each current tab
 // https://stackoverflow.com/questions/10994324/chrome-extension-content-script-re-injection-after-upgrade-or-install/11598753#11598753
 
+// Import other scripts
+importScripts('observatron_options.js', 'context_menu.js', 'filenames.js');
 
 var options = new Options();
 
@@ -20,7 +22,7 @@ chrome.storage.onChanged.addListener(storageHasChanged);
 chrome.runtime.onMessage.addListener(requested);
 
 // Enable Disable on click
-chrome.browserAction.onClicked.addListener(function() {
+chrome.action.onClicked.addListener(function() {
   toggle_observatron_status();
 });
 
@@ -79,7 +81,7 @@ function changedOptions(){
 // useful info
 //https://stackoverflow.com/questions/13141072/how-to-get-notified-on-window-resize-in-chrome-browser
 //https://github.com/NV/chrome-o-tile/blob/master/chrome/background.js
-function requested(request){
+function requested(request, sender, sendResponse){
 
   if(!isObservatronEngaged()){
     return false;
@@ -106,6 +108,12 @@ function requested(request){
     }
   }
 
+  if (request.method === 'saveNote') {
+    saveNoteFromMessage(request.noteText, request.withScreenshot);
+    sendResponse({success: true});
+    return true; // Keep the message channel open for async response
+  }
+
   return false;
 
 }
@@ -127,8 +135,8 @@ function toggle_observatron_status(){
 
       changedOptions();
 
-      chrome.browserAction.setIcon({path:"icons/red.png"});
-      chrome.browserAction.setTitle({title:"Engage The Observatron"});
+      chrome.action.setIcon({path: chrome.runtime.getURL("icons/red.png")});
+      chrome.action.setTitle({title:"Engage The Observatron"});
 
     }else{
       // switch it on
@@ -148,8 +156,8 @@ function toggle_observatron_status(){
       //chrome.tabs.getCurrent(simulatePageLoadForTab);
 
       
-      chrome.browserAction.setIcon({path:"icons/green.png"});
-      chrome.browserAction.setTitle({title:"Disengage The Observatron"});
+      chrome.action.setIcon({path: chrome.runtime.getURL("icons/green.png")});
+      chrome.action.setTitle({title:"Disengage The Observatron"});
     }
 }
 
@@ -251,29 +259,26 @@ function commandHandler(command){
 }
 
 function logANote(){
-  // simple note taking experiment
-  var noteText = window.prompt("Add Note to log \n(? question, ! bug, - todo, @customtype)","");
-  var withScreenshot = false;
+  // Open note taking page
+  chrome.tabs.create({url: chrome.runtime.getURL('note.html')});
+}
+
+function saveNoteFromMessage(noteText, withScreenshot) {
   var noteId = Math.floor(Date.now());
 
-  if(noteText != null){
+  // is it a special note?
+  // ? question
+  // ! bug
+  // - todo
+  // @type
 
-    withScreenshot = window.confirm("Do you want a screenshot with that?");
-    
-    // is it a special note?
-    // ? question
-    // ! bug
-    // - todo
-    // @type
+  var noteToLog = getSpecialNoteTypeFromString(noteText);
+  noteToLog.id = noteId.toString();
 
-    noteToLog = getSpecialNoteTypeFromString(noteText);
-    noteToLog.id = noteId.toString();
-
-    // TODO store screenshot name in the note as a screenshot property
-    downloadAsLog(noteToLog.type+"_"+noteToLog.id, noteToLog);
-    if(withScreenshot){
-      downloadScreenshot("_note_" + noteToLog.id);
-    }
+  // TODO store screenshot name in the note as a screenshot property
+  downloadAsLog(noteToLog.type+"_"+noteToLog.id, noteToLog);
+  if(withScreenshot){
+    downloadScreenshot("_note_" + noteToLog.id);
   }
 }
 
@@ -336,19 +341,20 @@ function downloadMHTML(mhtmlData){
 
   var downloadFileName = getFileName(options.filepath, options.fileprefix, "mhtmldata", "mhtml");
 
-    // convert blob to url found at https://bugzilla.mozilla.org/show_bug.cgi?format=default&id=1271345
-    //console.log(mhtmlData);   
-
-    var blobURL = window.URL.createObjectURL(mhtmlData);
-
-    chrome.downloads.download(
-          {
-            url:blobURL, 
-            filename: downloadFileName
-          },function(downloadId){
-        console.log(downloadFileName);
-        console.log("download begin, the download is:" + downloadFileName);
-    });
+    // Convert blob to base64 data URL for service worker compatibility
+    var reader = new FileReader();
+    reader.onload = function() {
+      var dataURL = reader.result;
+      chrome.downloads.download(
+            {
+              url: dataURL,
+              filename: downloadFileName
+            },function(downloadId){
+          console.log(downloadFileName);
+          console.log("download begin, the download is:" + downloadFileName);
+      });
+    };
+    reader.readAsDataURL(mhtmlData);
 
 }
 
@@ -393,14 +399,14 @@ function downloadAsLog(fileNameAppend, objectToWrite, attribute){
     outputObject=objectToWrite;
   }
 
-  var blob = new Blob([JSON.stringify(outputObject)], {type : 'application/json'});
-  var blobURL = window.URL.createObjectURL(blob);
+  var jsonString = JSON.stringify(outputObject);
+  var dataURL = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonString);
 
   var downloadFileName = getFileName(options.filepath, options.fileprefix, fileNameAppend, "json");
 
   chrome.downloads.download(
         {
-          url:blobURL, 
+          url: dataURL,
           filename: downloadFileName
         },function(downloadId){
       console.log(downloadFileName);

@@ -3,13 +3,7 @@
   "version": "0.92",
   "description": "The Observatron observes things in the browser",
   "background": {
-    "persistent": true,
-    "scripts": [
-                "javascript/observatron_options.js",
-                "javascript/context_menu.js",
-                "javascript/filenames.js",
-                "javascript/background.js"
-              ]
+    "service_worker": "javascript/background.js"
   },
   "commands": {
     "log-a-note": {
@@ -20,7 +14,7 @@
       "description": "log a note"
     }
   },
-  "browser_action": {
+  "action": {
     "default_icon": "icons/red.png",
     "default_title": "Engage The Observatron"
   },
@@ -42,10 +36,12 @@
     "downloads",
     "webNavigation",
     "pageCapture",
-    "<all_urls>",
     "storage",
     "webRequest",
     "contextMenus"
-    ],
-  "manifest_version": 2
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "manifest_version": 3
 }
