@@ -13,20 +13,51 @@ function ContextMenus(){
     }
 
     function createSeparator(id){
-    // since there is a limit to the number of options in the browser top level item, do not include separators in that menu
-    // console.log(chrome.contextMenus.ACTION_MENU_TOP_LEVEL_LIMIT);
-    return chrome.contextMenus.create(
-        {"id": id, "type": "separator", "contexts": ["page"]});
+        try {
+            return chrome.contextMenus.create(
+                {"id": id, "type": "separator", "contexts": ["page"]});
+        } catch (e) {
+            // Menu might already exist, try to update
+            try {
+                chrome.contextMenus.update(id, {"type": "separator", "contexts": ["page"]});
+                return id;
+            } catch (e2) {
+                console.log("Failed to create/update separator:", id, e2);
+                return null;
+            }
+        }
     }
 
     function createMenu(id, title){
-        return chrome.contextMenus.create(
-            {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
+        try {
+            return chrome.contextMenus.create(
+                {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
+        } catch (e) {
+            // Menu might already exist, try to update
+            try {
+                chrome.contextMenus.update(id, {"title": title, "type": "normal", "contexts": contextTypes});
+                return id;
+            } catch (e2) {
+                console.log("Failed to create/update menu:", id, e2);
+                return null;
+            }
+        }
     }
 
     function createParentMenu(id, title){
-        return chrome.contextMenus.create(
-            {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
+        try {
+            return chrome.contextMenus.create(
+                {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
+        } catch (e) {
+            // Menu might already exist, try to update
+            try {
+                chrome.contextMenus.update(id, {"title": title, "type": "normal", "contexts": contextTypes});
+                return id;
+            } catch (e2) {
+                console.log("Failed to create/update parent menu:", id, e2);
+                return null;
+            }
+        }
     }
 
     function createCheckboxMenu(id, title, currentStatus, parent){
@@ -34,11 +65,22 @@ function ContextMenus(){
         if(parent !== undefined){
             menuDetails.parentId = parent;
         }
-        return chrome.contextMenus.create(menuDetails);
+        try {
+            return chrome.contextMenus.create(menuDetails);
+        } catch (e) {
+            // Menu might already exist, try to update
+            try {
+                delete menuDetails.id; // Remove id for update
+                chrome.contextMenus.update(id, menuDetails);
+                return id;
+            } catch (e2) {
+                console.log("Failed to create/update checkbox menu:", id, e2);
+                return null;
+            }
+        }
     }
 
     this.createMenus = function(){
-
         contextMenus.takeScreenshotNow = createMenu("takeScreenshotNow", "Take Screenshot Now");
         contextMenus.saveAsMhtmlNow = createMenu("saveAsMhtmlNow", "Save as MHTML Now");
         contextMenus.logNote = createMenu("logNote", "Take Note");
@@ -55,8 +97,6 @@ function ContextMenus(){
 
         contextMenus.line2 = createSeparator("separator2");
         contextMenus.showOptionsNow = createMenu("showOptionsNow", "Options");
-
-        chrome.contextMenus.onClicked.addListener(contextMenuClickHandler);
     }
 
     function contextMenuClickHandler(info, tab){
@@ -104,15 +144,30 @@ function ContextMenus(){
 
 
     function updateTheContextMenus(){
-        chrome.contextMenus.update("togglePostSubmit", {"checked" : options.onPostSubmit});
-        chrome.contextMenus.update("toggleOnScroll", {"checked" : options.onScrollEvent});
-        chrome.contextMenus.update("toggleOnResize", {"checked" : options.onResizeEvent});
-        chrome.contextMenus.update("toggleOnPageLoad", {"checked" : options.onPageLoad});
-        chrome.contextMenus.update("toggleOnPageUpdated", {"checked" : options.onPageUpdated});
-        chrome.contextMenus.update("toggleDoubleClick", {"checked" : options.onDoubleClickShot});
+        try {
+            chrome.contextMenus.update("togglePostSubmit", {"checked" : options.onPostSubmit});
+        } catch (e) { /* Menu might not exist */ }
+        try {
+            chrome.contextMenus.update("toggleOnScroll", {"checked" : options.onScrollEvent});
+        } catch (e) { /* Menu might not exist */ }
+        try {
+            chrome.contextMenus.update("toggleOnResize", {"checked" : options.onResizeEvent});
+        } catch (e) { /* Menu might not exist */ }
+        try {
+            chrome.contextMenus.update("toggleOnPageLoad", {"checked" : options.onPageLoad});
+        } catch (e) { /* Menu might not exist */ }
+        try {
+            chrome.contextMenus.update("toggleOnPageUpdated", {"checked" : options.onPageUpdated});
+        } catch (e) { /* Menu might not exist */ }
+        try {
+            chrome.contextMenus.update("toggleDoubleClick", {"checked" : options.onDoubleClickShot});
+        } catch (e) { /* Menu might not exist */ }
     }
 
     this.updateContextMenus = function(){
         updateTheContextMenus();
     }
+
+    // Register click handler
+    chrome.contextMenus.onClicked.addListener(contextMenuClickHandler);
 }

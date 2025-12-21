@@ -56,10 +56,15 @@ function sendAMessageWhenTimeoutComplete( timeoutVariable){
 }
 
 function sendAMessage( timeoutVariable){
-  if(chrome.runtime!=undefined){
-    chrome.runtime.sendMessage({method: timeoutVariable.messageName});
-    console.log(timeoutVariable.messageName + " sent");
-    timeoutVariable.timeout = 0;
+  if(chrome.runtime!=undefined && chrome.runtime.sendMessage){
+    try {
+      chrome.runtime.sendMessage({method: timeoutVariable.messageName});
+      console.log(timeoutVariable.messageName + " sent");
+      timeoutVariable.timeout = 0;
+    } catch (error) {
+      // Extension context may be invalidated (service worker terminated)
+      console.log("Failed to send message - extension context invalidated:", error);
+    }
   }
 }
 

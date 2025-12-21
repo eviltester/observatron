@@ -47,6 +47,13 @@ chrome.commands.onCommand.addListener(function(command) {
 // context menu
 var contextMenus = new ContextMenus();
 contextMenus.init(downloadScreenshot, saveAsMhtml, options);
+
+// Create context menus when service worker starts
+chrome.runtime.onStartup.addListener(() => {
+  contextMenus.createMenus();
+});
+
+// Also create menus immediately
 contextMenus.createMenus();
 
 /*
