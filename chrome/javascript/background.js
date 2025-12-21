@@ -5,6 +5,7 @@
 importScripts('observatron_options.js', 'context_menu.js', 'filenames.js');
 
 var options = new Options();
+var engagedDomain = null;
 
 changedOptions();
 
@@ -48,6 +49,11 @@ chrome.commands.onCommand.addListener(function(command) {
 var contextMenus = new ContextMenus();
 contextMenus.init(downloadScreenshot, saveAsMhtml, options);
 
+// Create context menus on install
+chrome.runtime.onInstalled.addListener(() => {
+  contextMenus.createMenus();
+});
+
 // Create context menus when service worker starts
 chrome.runtime.onStartup.addListener(() => {
   contextMenus.createMenus();
@@ -76,6 +82,21 @@ function storageHasChanged(changes, namespace) {
 
 function changedOptions(){
   chrome.storage.local.set({observatron: options});
+
+  // Notify all content scripts of the engagement status change
+  chrome.tabs.query({}, function(tabs) {
+    tabs.forEach(function(tab) {
+      if (tab.id) {
+        chrome.tabs.sendMessage(tab.id, {
+          method: 'observatronStatusChanged',
+          engaged: options.engaged,
+          domain: engagedDomain
+        }).catch(() => {
+          // Ignore errors for tabs that don't have content scripts
+        });
+      }
+    });
+  });
 }
 
 
@@ -95,6 +116,12 @@ function requested(request, sender, sendResponse){
     saveNoteFromMessage(request.noteText, request.withScreenshot);
     sendResponse({success: true});
     return true; // Keep the message channel open for async response
+  }
+
+  // Handle status requests
+  if (request.method === 'getStatus') {
+    sendResponse({engaged: options.engaged, domain: engagedDomain});
+    return true;
   }
 
   if(!isObservatronEngaged()){
@@ -131,6 +158,16 @@ function isObservatronEngaged(){
   return options.engaged;
 }
 
+function isTabOnEngagedDomain(tab) {
+  if (!engagedDomain) return false;
+  try {
+    const tabDomain = new URL(tab.url).hostname;
+    return tabDomain === engagedDomain;
+  } catch (e) {
+    return false;
+  }
+}
+
 
 
 
@@ -140,6 +177,7 @@ function toggle_observatron_status(){
       // switch it off
       console.log("Observatron Disengaged");
       options.engaged = false;
+      engagedDomain = null; // Clear the engaged domain
 
       changedOptions();
 
@@ -151,14 +189,26 @@ function toggle_observatron_status(){
       console.log("Observatron Engaged");
       options.engaged=true;
 
+      // Record the current domain
+      chrome.tabs.query({ currentWindow: true, active: true }, function(tabs) {
+        if (tabs[0] && tabs[0].url) {
+          try {
+            engagedDomain = new URL(tabs[0].url).hostname;
+            console.log("Observatron engaged on domain:", engagedDomain);
+          } catch (e) {
+            engagedDomain = null;
+            console.log("Could not parse domain from URL:", tabs[0].url);
+          }
+        }
+        simulatePageLoadForTab(tabs);
+      });
+
       changedOptions();
 
-      chrome.storage.local.set({observatron_screenshotter: 
-                                  {resize_timeout: options.resize_timeout_milliseconds,
-                                   scrolling_timeout: options.resize_timeout_milliseconds}
-                                });
-
-      chrome.tabs.query({ currentWindow: true, active: true }, simulatePageLoadForTab);
+      chrome.storage.local.set({observatron_screenshotter:
+                                   {resize_timeout: options.resize_timeout_milliseconds,
+                                    scrolling_timeout: options.resize_timeout_milliseconds}
+                                 });
 
       // tabs.getCurrent provided an undefined tab  
       //chrome.tabs.getCurrent(simulatePageLoadForTab);
@@ -198,9 +248,9 @@ function configuredOnPageLoad(anObject){
     //console.log(anObject);
 
   if(options.onPageLoad){
-  
+
     console.log("page load");
-    
+
     if(!anObject.hasOwnProperty('frameId')){
       return;
     }
@@ -208,18 +258,20 @@ function configuredOnPageLoad(anObject){
     if(anObject.frameId!=0){
       // todo: this should be configurable 0 is page root, others are 'parts' of page loaded dynamically and frames
       return;
-    }    
+    }
 
     if(!anObject.hasOwnProperty('tabId')){
       return;
     }
 
-    
-    //console.log(anObject);
-
-    downloadAsLog( "url", anObject, "url");
-    saveAsMhtml(anObject.tabId);
-    takeScreenshotIfWeCareAboutPage();
+    // Check if the navigation is on the engaged domain
+    chrome.tabs.get(anObject.tabId, function(tab) {
+      if (tab && isTabOnEngagedDomain(tab)) {
+        downloadAsLog( "url", anObject, "url");
+        saveAsMhtml(anObject.tabId);
+        takeScreenshotIfWeCareAboutPage();
+      }
+    });
 
   }
 }
@@ -231,6 +283,11 @@ function configuredOnPageUpdated(tabId, changeInfo, tab){
     return;
   }
 
+  // Check if tab is on the engaged domain
+  if (!isTabOnEngagedDomain(tab)) {
+    return;
+  }
+
   if(options.onPageUpdated){
 
     if(changeInfo.hasOwnProperty("url")){
@@ -239,7 +296,7 @@ function configuredOnPageUpdated(tabId, changeInfo, tab){
 
     if (changeInfo.status == 'complete') {
       saveAsMhtml(tabId);
-      takeScreenshotIfWeCareAboutPage(); 
+      takeScreenshotIfWeCareAboutPage();
     }
   }
 }
@@ -335,13 +392,26 @@ function getSpecialNoteTypeFromString(theString){
 
 function saveAsMhtml(anId){
 
-  if(anId === undefined){   
+  if(anId === undefined){
       getCurrentTab().then(function(tab){
-        chrome.pageCapture.saveAsMHTML({tabId: tab.id}, downloadMHTML);
+        // Check for lastError after saveAsMHTML call
+        chrome.pageCapture.saveAsMHTML({tabId: tab.id}, function(mhtmlData) {
+          if (chrome.runtime.lastError) {
+            console.warn("MHTML generation failed:", chrome.runtime.lastError.message);
+            return;
+          }
+          downloadMHTML(mhtmlData);
+        });
       });
   }
   else{
-      chrome.pageCapture.saveAsMHTML({tabId: anId}, downloadMHTML);
+      chrome.pageCapture.saveAsMHTML({tabId: anId}, function(mhtmlData) {
+        if (chrome.runtime.lastError) {
+          console.warn("MHTML generation failed:", chrome.runtime.lastError.message);
+          return;
+        }
+        downloadMHTML(mhtmlData);
+      });
   }
 }
 
@@ -349,20 +419,29 @@ function downloadMHTML(mhtmlData){
 
   var downloadFileName = getFileName(options.filepath, options.fileprefix, "mhtmldata", "mhtml");
 
-    // Convert blob to base64 data URL for service worker compatibility
-    var reader = new FileReader();
-    reader.onload = function() {
-      var dataURL = reader.result;
-      chrome.downloads.download(
-            {
-              url: dataURL,
-              filename: downloadFileName
-            },function(downloadId){
-          console.log(downloadFileName);
-          console.log("download begin, the download is:" + downloadFileName);
-      });
-    };
-    reader.readAsDataURL(mhtmlData);
+  // Check if mhtmlData is valid
+  if (!mhtmlData || !(mhtmlData instanceof Blob)) {
+    console.warn("MHTML capture failed or returned invalid data:", mhtmlData);
+    return;
+  }
+
+  // Use data URL approach for service worker compatibility
+  var reader = new FileReader();
+  reader.onload = function() {
+    var dataURL = reader.result;
+    chrome.downloads.download(
+          {
+            url: dataURL,
+            filename: downloadFileName
+          },function(downloadId){
+        console.log(downloadFileName);
+        console.log("download begin, the download is:" + downloadFileName);
+    });
+  };
+  reader.onerror = function() {
+    console.warn("Failed to read MHTML blob");
+  };
+  reader.readAsDataURL(mhtmlData);
 
 }
 
@@ -372,6 +451,16 @@ function downloadPostForm(details){
   }
 
   if(!options.onPostSubmit){
+    return;
+  }
+
+  // Check if the request is from the engaged domain
+  try {
+    const requestDomain = new URL(details.url).hostname;
+    if (requestDomain !== engagedDomain) {
+      return;
+    }
+  } catch (e) {
     return;
   }
 
@@ -427,7 +516,7 @@ var width, height;
 
 function takeScreenshotIfWeCareAboutPage(){
 
-      // Some pages do not screenshot well, 
+      // Some pages do not screenshot well,
       // e.g. apps and options so we do not care about those
       chrome.tabs.query({ currentWindow: true, active: true }, function(tabs){
 
@@ -439,6 +528,11 @@ function takeScreenshotIfWeCareAboutPage(){
           return;
         }
         if(tabs[0].id==chrome.tabs.TAB_ID_NONE){
+          return;
+        }
+
+        // Check if tab is on the engaged domain
+        if (!isTabOnEngagedDomain(tabs[0])) {
           return;
         }
 

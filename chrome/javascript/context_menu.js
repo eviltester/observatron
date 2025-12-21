@@ -13,51 +13,18 @@ function ContextMenus(){
     }
 
     function createSeparator(id){
-        try {
-            return chrome.contextMenus.create(
-                {"id": id, "type": "separator", "contexts": ["page"]});
-        } catch (e) {
-            // Menu might already exist, try to update
-            try {
-                chrome.contextMenus.update(id, {"type": "separator", "contexts": ["page"]});
-                return id;
-            } catch (e2) {
-                console.log("Failed to create/update separator:", id, e2);
-                return null;
-            }
-        }
+        return chrome.contextMenus.create(
+            {"id": id, "type": "separator", "contexts": ["page"]});
     }
 
     function createMenu(id, title){
-        try {
-            return chrome.contextMenus.create(
-                {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
-        } catch (e) {
-            // Menu might already exist, try to update
-            try {
-                chrome.contextMenus.update(id, {"title": title, "type": "normal", "contexts": contextTypes});
-                return id;
-            } catch (e2) {
-                console.log("Failed to create/update menu:", id, e2);
-                return null;
-            }
-        }
+        return chrome.contextMenus.create(
+            {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
     }
 
     function createParentMenu(id, title){
-        try {
-            return chrome.contextMenus.create(
-                {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
-        } catch (e) {
-            // Menu might already exist, try to update
-            try {
-                chrome.contextMenus.update(id, {"title": title, "type": "normal", "contexts": contextTypes});
-                return id;
-            } catch (e2) {
-                console.log("Failed to create/update parent menu:", id, e2);
-                return null;
-            }
-        }
+        return chrome.contextMenus.create(
+            {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
     }
 
     function createCheckboxMenu(id, title, currentStatus, parent){
@@ -65,38 +32,39 @@ function ContextMenus(){
         if(parent !== undefined){
             menuDetails.parentId = parent;
         }
-        try {
-            return chrome.contextMenus.create(menuDetails);
-        } catch (e) {
-            // Menu might already exist, try to update
-            try {
-                delete menuDetails.id; // Remove id for update
-                chrome.contextMenus.update(id, menuDetails);
-                return id;
-            } catch (e2) {
-                console.log("Failed to create/update checkbox menu:", id, e2);
-                return null;
-            }
-        }
+        return chrome.contextMenus.create(menuDetails);
     }
 
     this.createMenus = function(){
-        contextMenus.takeScreenshotNow = createMenu("takeScreenshotNow", "Take Screenshot Now");
-        contextMenus.saveAsMhtmlNow = createMenu("saveAsMhtmlNow", "Save as MHTML Now");
-        contextMenus.logNote = createMenu("logNote", "Take Note");
-        contextMenus.line = createSeparator("separator1");
-        contextMenus.screenshots = createParentMenu("screenshots", "Screenshot");
-            contextMenus.toggleOnScroll = createCheckboxMenu("toggleOnScroll", "on Scroll", options.onScrollEvent, contextMenus.screenshots);
-            contextMenus.toggleOnResize = createCheckboxMenu("toggleOnResize", "on resize", options.onResizeEvent, contextMenus.screenshots);
-            contextMenus.toggleDoubleClick = createCheckboxMenu("toggleDoubleClick", "Screenshot on Double Click", options.onDoubleClickShot, contextMenus.screenshots);
-        contextMenus.log = createParentMenu("log", "Log");
-            contextMenus.toggleOnPageLoad = createCheckboxMenu("toggleOnPageLoad", "on Page Load", options.onPageLoad, contextMenus.log);
-            contextMenus.toggleOnPageUpdated = createCheckboxMenu("toggleOnPageUpdated", "on Page Updated", options.onPageUpdated, contextMenus.log);
-            contextMenus.togglePostSubmit = createCheckboxMenu("togglePostSubmit", "POST form contents to a file", options.onPostSubmit, contextMenus.log);
-        //contextMenus.note = createParentMenu("Note");
+        // Remove all existing menus to prevent duplicates
+        chrome.contextMenus.removeAll(function() {
+            // Create menus after removal is complete
+            try {
+                contextMenus.takeScreenshotNow = createMenu("takeScreenshotNow", "Take Screenshot Now");
+                contextMenus.saveAsMhtmlNow = createMenu("saveAsMhtmlNow", "Save as MHTML Now");
+                contextMenus.logNote = createMenu("logNote", "Take Note");
+                contextMenus.line = createSeparator("separator1");
+                contextMenus.screenshots = createParentMenu("screenshots", "Screenshot");
+                    contextMenus.toggleOnScroll = createCheckboxMenu("toggleOnScroll", "on Scroll", options.onScrollEvent, contextMenus.screenshots);
+                    contextMenus.toggleOnResize = createCheckboxMenu("toggleOnResize", "on resize", options.onResizeEvent, contextMenus.screenshots);
+                    contextMenus.toggleDoubleClick = createCheckboxMenu("toggleDoubleClick", "Screenshot on Double Click", options.onDoubleClickShot, contextMenus.screenshots);
+                contextMenus.log = createParentMenu("log", "Log");
+                    contextMenus.toggleOnPageLoad = createCheckboxMenu("toggleOnPageLoad", "on Page Load", options.onPageLoad, contextMenus.log);
+                    contextMenus.toggleOnPageUpdated = createCheckboxMenu("toggleOnPageUpdated", "on Page Updated", options.onPageUpdated, contextMenus.log);
+                    contextMenus.togglePostSubmit = createCheckboxMenu("togglePostSubmit", "POST form contents to a file", options.onPostSubmit, contextMenus.log);
+                //contextMenus.note = createParentMenu("Note");
 
-        contextMenus.line2 = createSeparator("separator2");
-        contextMenus.showOptionsNow = createMenu("showOptionsNow", "Options");
+                contextMenus.line2 = createSeparator("separator2");
+                contextMenus.showOptionsNow = createMenu("showOptionsNow", "Options");
+
+                console.log("Context menus created successfully");
+
+                // Register click handler after menus are created
+                chrome.contextMenus.onClicked.addListener(contextMenuClickHandler);
+            } catch (error) {
+                console.error("Failed to create context menus:", error);
+            }
+        });
     }
 
     function contextMenuClickHandler(info, tab){

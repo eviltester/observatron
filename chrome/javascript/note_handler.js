@@ -10,7 +10,10 @@ document.getElementById('saveNote').addEventListener('click', function() {
             method: 'saveNote',
             noteText: noteText,
             withScreenshot: withScreenshot
-        }, function() {
+        }, function(response) {
+            if (chrome.runtime.lastError) {
+                console.warn("Failed to save note:", chrome.runtime.lastError.message);
+            }
             window.close();
         });
     }
