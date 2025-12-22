@@ -171,5 +171,10 @@ e.g. "obs_2019-02-20-11-32-57-314-screenshot-1201x1104_note_1550662375417.jpg"
 
 This extension is open source.
 
-Copyright 2019 Compendium Developments Ltd, Alan Richardson
+Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
+
+# Versions
+
+- 0.95 updated to manifest v3 and added much more error handling - 20251222
+- 0.92 initial version
 
