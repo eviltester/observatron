@@ -6,6 +6,7 @@ importScripts('observatron_options.js', 'context_menu.js', 'filenames.js');
 
 var options = new Options();
 var engagedDomain = null;
+var sideBarSide= "left";
 
 changedOptions();
 
@@ -23,8 +24,8 @@ chrome.storage.onChanged.addListener(storageHasChanged);
 chrome.runtime.onMessage.addListener(requested);
 
 // Enable Disable on click
-chrome.action.onClicked.addListener(function() {
-  toggle_observatron_status();
+chrome.action.onClicked.addListener((tab) => {
+  toggle_observatron_status(tab);
 });
 
 chrome.webNavigation.onCompleted.addListener(configuredOnPageLoad);
@@ -68,6 +69,7 @@ contextMenus.createMenus();
 
 */
 
+// TODO: this could be a message to set options on the backend
 function storageHasChanged(changes, namespace) {
   if(namespace === "local"){
     if(changes.hasOwnProperty("observatron")){
@@ -124,8 +126,25 @@ function requested(request, sender, sendResponse){
     return true;
   }
 
+    if (request.method === 'takeScreenshot') {
+        takeScreenshot();
+        return true;
+    }
+
+    if (request.method === 'savePage') {
+        saveAsMhtml();
+        return true;
+    }
+
+    // all methods above can be triggered manually
+    // below, is automated and the observatron needs to be engaged
   if(!isObservatronEngaged()){
     return false;
+  }
+
+  if (request.method === 'toggleSideBarSide') {
+    sideBarSide = (sideBarSide == "right" ? "left" : "right");
+    toggleSidePanelSide();
   }
 
   if (request.method === 'resize') {
@@ -171,7 +190,7 @@ function isTabOnEngagedDomain(tab) {
 
 
 
-function toggle_observatron_status(){
+function toggle_observatron_status(tab){
 
     if(isObservatronEngaged()){
       // switch it off
@@ -183,6 +202,7 @@ function toggle_observatron_status(){
 
       chrome.action.setIcon({path: chrome.runtime.getURL("icons/red.png")});
       chrome.action.setTitle({title:"Engage The Observatron"});
+      showSidePanel(tab.id,false);
 
     }else{
       // switch it on
@@ -216,6 +236,7 @@ function toggle_observatron_status(){
       
       chrome.action.setIcon({path: chrome.runtime.getURL("icons/green.png")});
       chrome.action.setTitle({title:"Disengage The Observatron"});
+      showSidePanel(tab.id,true);
     }
 }
 
@@ -276,19 +297,43 @@ function configuredOnPageLoad(anObject){
   }
 }
 
+async function showSidePanel(tabId, shown){
+
+    var useTabId = tabId;
+    if(useTabId==undefined){
+        const tab = await getCurrentTab();
+        useTabId = tab.id;
+    }
+
+    chrome.sidePanel.setOptions({
+      tabId: useTabId,
+      path: 'sidepanel/sidepanel.html',
+      enabled: shown
+      }, ()=> {
+            if(shown){
+                chrome.sidePanel.open({ tabId: tabId });
+            }
+        }
+    );
+}
+
 function configuredOnPageUpdated(tabId, changeInfo, tab){
 
   // https://developer.chrome.com/extensions/tabs#event-onUpdated
   if(!isObservatronEngaged()){
+    showSidePanel(tabId, false);
     return;
   }
 
   // Check if tab is on the engaged domain
   if (!isTabOnEngagedDomain(tab)) {
+    showSidePanel(tabId, false);
     return;
   }
 
   if(options.onPageUpdated){
+
+    showSidePanel(tabId, true);
 
     if(changeInfo.hasOwnProperty("url")){
       downloadAsLog( "url", changeInfo, "url");
@@ -538,6 +583,10 @@ function takeScreenshotIfWeCareAboutPage(){
 
         downloadScreenshot();
       });
+}
+
+function takeScreenshot(){
+    downloadScreenshot();
 }
 
 function downloadScreenshot(additionalPrefix){

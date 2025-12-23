@@ -43,6 +43,7 @@ function ContextMenus(){
                 contextMenus.takeScreenshotNow = createMenu("takeScreenshotNow", "Take Screenshot Now");
                 contextMenus.saveAsMhtmlNow = createMenu("saveAsMhtmlNow", "Save as MHTML Now");
                 contextMenus.logNote = createMenu("logNote", "Take Note");
+                contextMenus.showSidePanel = createMenu("showSidePanel", "Show Side Panel");
                 contextMenus.line = createSeparator("separator1");
                 contextMenus.screenshots = createParentMenu("screenshots", "Screenshot");
                     contextMenus.toggleOnScroll = createCheckboxMenu("toggleOnScroll", "on Scroll", options.onScrollEvent, contextMenus.screenshots);
@@ -81,6 +82,9 @@ function ContextMenus(){
                 return;
             case "logNote":
                 logANote();
+                return;
+            case "showSidePanel":
+                showSidePanel(tab.id, true);
                 return;
             case "togglePostSubmit":
                 options.onPostSubmit = !options.onPostSubmit;

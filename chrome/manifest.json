@@ -24,6 +24,7 @@
     "128": "icons/red-128x128.png"
   },
   "options_page": "options/options_page.html",
+  "devtools_page": "devtools/devtools.html",
   "content_scripts": [
     {
       "js": ["javascript/screenshotter.js"],
@@ -38,7 +39,8 @@
     "pageCapture",
     "storage",
     "webRequest",
-    "contextMenus"
+    "contextMenus",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
