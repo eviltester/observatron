@@ -236,7 +236,8 @@ function toggle_observatron_status(tab){
       
       chrome.action.setIcon({path: chrome.runtime.getURL("icons/green.png")});
       chrome.action.setTitle({title:"Disengage The Observatron"});
-      showSidePanel(tab.id,true);
+            // user must manually show side bar because we also have the devtools
+      //showSidePanel(tab.id,true);
     }
 }
 
