@@ -179,6 +179,79 @@ window.addEventListener(
 /*
   Configure the event listeners to pass messages back to the background.js
 */
+// MutationObserver for DOM changes
+var mutationObserver = new MutationObserver(function(mutations) {
+  // Only log if observatron is engaged and on correct domain
+  if (!isObservatronEngaged) return;
+  if (!engagedDomain) return;
+  if (isPageFromCache) return;
+  if (!checkRuntimeConnection()) return;
+  if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) return;
+
+  try {
+    const currentDomain = window.location.hostname;
+    if (currentDomain !== engagedDomain) return;
+
+    // Serialize mutations to avoid DOM element serialization issues
+    var serializedMutations = mutations.map(function(mutation) {
+      return {
+        type: mutation.type,
+        targetTag: mutation.target.tagName,
+        targetId: mutation.target.id,
+        targetClass: mutation.target.className,
+        addedNodesCount: mutation.addedNodes.length,
+        removedNodesCount: mutation.removedNodes.length,
+        attributeName: mutation.attributeName,
+        oldValue: mutation.oldValue ? mutation.oldValue.substring(0, 100) : null,
+        newValue: mutation.attributeName ? mutation.target.getAttribute(mutation.attributeName) : (mutation.target.innerText ? mutation.target.innerText.substring(0, 100) : null)
+      };
+    });
+
+    chrome.runtime.sendMessage({
+      method: "logUserEvent",
+      event: {
+        eventType: "domMutation",
+        mutations: serializedMutations
+      }
+    }, function(response) {
+      if (chrome.runtime.lastError) {
+        // Mark runtime as disconnected on persistent errors
+        if (chrome.runtime.lastError.message.includes('Extension context invalidated') ||
+            chrome.runtime.lastError.message.includes('message port closed')) {
+          isRuntimeConnected = false;
+        }
+        // Don't log expected errors to avoid console spam
+      }
+    });
+  } catch (e) {
+    console.log("Failed to log mutation event:", e);
+  }
+});
+
+// Start observing mutations on document body
+if (document.body) {
+  mutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeOldValue: true,
+    characterData: true,
+    characterDataOldValue: true
+  });
+} else {
+  // If body not ready, wait for DOMContentLoaded
+  document.addEventListener('DOMContentLoaded', function() {
+    mutationObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeOldValue: true,
+      characterData: true,
+      characterDataOldValue: true
+    });
+  });
+}
+
 window.addEventListener('resize', sendResizeMessage, false);
 window.addEventListener('scroll', sendScrollMessage, false);
 window.addEventListener('dblclick', sendDblClickMessage, false);
