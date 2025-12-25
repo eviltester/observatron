@@ -108,6 +108,75 @@ function setObservatronDefaults(options){
 }
 
 /*
+
+Not really screenshot - event capture
+*/
+
+window.addEventListener(
+  "input",
+  (e) => {
+    const el = e.target;
+
+    if (el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el instanceof HTMLSelectElement) {
+
+        try{
+            chrome.runtime.sendMessage({
+                method: "logUserEvent",
+                event: {
+                    eventType: "inputValueChanged",
+                    tag: el.tagName,
+                    name: el.name,
+                    id: el.id,
+                    value: el.value
+                  }
+                }, function(response) {
+                    if (chrome.runtime.lastError) {
+                       console.log("Error logging event status:", chrome.runtime.lastError.message);
+                     }
+                }
+            );
+        } catch (e) {
+               console.log("Failed to request status:", e);
+        }
+    }
+  },
+  true // capture phase (important!)
+);
+
+window.addEventListener(
+  "click",
+  (e) => {
+    const el = e.target;
+
+        try{
+            chrome.runtime.sendMessage({
+                method: "logUserEvent",
+                event: {
+                    eventType: "clickedElement",
+                    tag: el.tagName,
+                    name: el.name,
+                    id: el.id,
+                    value: el.value,
+                    text: el.innerText.substring(0,50)
+                  }
+                }, function(response) {
+                    if (chrome.runtime.lastError) {
+                       console.log("Error logging event status:", chrome.runtime.lastError.message);
+                     }
+                }
+            );
+        } catch (e) {
+               console.log("Failed to request status:", e);
+        }
+  },
+  true // capture phase (important!)
+);
+
+
+
+/*
   Configure the event listeners to pass messages back to the background.js
 */
 window.addEventListener('resize', sendResizeMessage, false);

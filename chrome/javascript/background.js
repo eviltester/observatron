@@ -142,9 +142,8 @@ function requested(request, sender, sendResponse){
     return false;
   }
 
-  if (request.method === 'toggleSideBarSide') {
-    sideBarSide = (sideBarSide == "right" ? "left" : "right");
-    toggleSidePanelSide();
+  if (request.method === 'logUserEvent') {
+    logEvent(request.event);
   }
 
   if (request.method === 'resize') {
@@ -391,6 +390,13 @@ function saveNoteFromMessage(noteText, withScreenshot) {
   if(withScreenshot){
     downloadScreenshot("_note_" + noteToLog.id);
   }
+}
+
+function logEvent(event) {
+  var eventId = Math.floor(Date.now());
+
+  console.log(event);
+  downloadAsLog("userEvent"+"_"+eventId, event);
 }
 
 function getSpecialNoteTypeFromString(theString){
