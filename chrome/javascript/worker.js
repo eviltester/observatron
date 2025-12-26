@@ -624,112 +624,118 @@ function takeScreenshotIfWeCareAboutPage(){
       });
 }
 
+function sanitizeRect(rect) {
+  return {
+    left: isFinite(rect.left) ? Math.max(0, Math.min(rect.left, 10000)) : 0,
+    top: isFinite(rect.top) ? Math.max(0, Math.min(rect.top, 10000)) : 0,
+    width: isFinite(rect.width) ? Math.max(1, Math.min(rect.width, 10000)) : 1,
+    height: isFinite(rect.height) ? Math.max(1, Math.min(rect.height, 10000)) : 1
+  };
+}
+
+function getUpdatedRect(selector, tabId, callback) {
+  chrome.scripting.executeScript({
+    target: { tabId: tabId },
+    function: (selector) => {
+      const el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      if (el) {
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        const rect = el.getBoundingClientRect();
+        if (!isFinite(rect.left) || !isFinite(rect.top) || !isFinite(rect.width) || !isFinite(rect.height)) {
+          return null;
+        }
+        const visibleRect = {
+          left: Math.max(0, rect.left),
+          top: Math.max(0, rect.top),
+          width: Math.min(window.innerWidth - Math.max(0, rect.left), rect.width),
+          height: Math.min(window.innerHeight - Math.max(0, rect.top), rect.height)
+        };
+        const scale = window.devicePixelRatio;
+        return {
+          left: visibleRect.left * scale,
+          top: visibleRect.top * scale,
+          width: visibleRect.width * scale,
+          height: visibleRect.height * scale
+        };
+      }
+      return null;
+    },
+    args: [selector]
+  }, (results) => {
+    if (chrome.runtime.lastError || !results || !results[0]) {
+      callback(null);
+      return;
+    }
+    const result = results[0].result;
+    if (!result || typeof result !== 'object' ||
+        typeof result.left !== 'number' || !isFinite(result.left) ||
+        typeof result.top !== 'number' || !isFinite(result.top) ||
+        typeof result.width !== 'number' || !isFinite(result.width) ||
+        typeof result.height !== 'number' || !isFinite(result.height)) {
+      callback(null);
+      return;
+    }
+    callback(sanitizeRect(result));
+  });
+}
+
+function cropElementScreenshot(dataURL, rect, tabId, callback) {
+  chrome.storage.local.set({tempDataURL: dataURL}, () => {
+    chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      function: (left, top, width, height) => {
+        return new Promise((resolve) => {
+          chrome.storage.local.get(['tempDataURL'], (result) => {
+            const dataURL = result.tempDataURL;
+            chrome.storage.local.remove('tempDataURL');
+            const w = Math.floor(width);
+            const h = Math.floor(height);
+            if (w <= 0 || h <= 0) {
+              resolve(dataURL);
+              return;
+            }
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              canvas.width = w;
+              canvas.height = h;
+              ctx.drawImage(img, left, top, width, height, 0, 0, w, h);
+              resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => {
+              resolve(dataURL);
+            };
+            img.src = dataURL;
+          });
+        });
+      },
+      args: [rect.left, rect.top, rect.width, rect.height]
+    }, (results) => {
+      callback(results && results[0] && results[0].result ? results[0].result : null);
+    });
+  });
+}
+
 function takeElementScreenshot(selector, rect, tabId) {
-  // Get the window ID for the tab
   chrome.tabs.get(tabId, (tab) => {
     if (chrome.runtime.lastError || !tab) {
-      console.warn("Failed to get tab");
       return;
     }
     const windowId = tab.windowId;
-    console.warn('About to execute scrolling with selector:', selector);
-    // Scroll element into view and get updated rect
-    chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      function: (selector) => {
-        const el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-        if (el) {
-          el.scrollIntoView({ block: 'center', inline: 'center' });
-          const rect = el.getBoundingClientRect();
-          if (!isFinite(rect.left) || !isFinite(rect.top) || !isFinite(rect.width) || !isFinite(rect.height)) {
-            return null;
-          }
-          const visibleRect = {
-            left: Math.max(0, rect.left),
-            top: Math.max(0, rect.top),
-            width: Math.min(window.innerWidth - Math.max(0, rect.left), rect.width),
-            height: Math.min(window.innerHeight - Math.max(0, rect.top), rect.height)
-          };
-          const scale = window.devicePixelRatio;
-          return {
-            left: visibleRect.left * scale,
-            top: visibleRect.top * scale,
-            width: visibleRect.width * scale,
-            height: visibleRect.height * scale
-          };
-        }
-        return null;
-      },
-      args: [selector]
-    }, (results) => {
-      if (chrome.runtime.lastError || !results || !results[0]) {
-        console.warn("Script execution failed");
+    getUpdatedRect(selector, tabId, (updatedRect) => {
+      if (!updatedRect) {
         return;
       }
-      const result = results[0].result;
-      if (!result || typeof result !== 'object') {
-        console.warn("Invalid result");
-        return;
-      }
-      const updatedRect = result;
-      if (typeof updatedRect.left !== 'number' || !isFinite(updatedRect.left) ||
-          typeof updatedRect.top !== 'number' || !isFinite(updatedRect.top) ||
-          typeof updatedRect.width !== 'number' || !isFinite(updatedRect.width) ||
-          typeof updatedRect.height !== 'number' || !isFinite(updatedRect.height)) {
-        console.warn("Invalid rect values");
-        return;
-      }
-      // Sanitize values to prevent serialization issues
-      updatedRect.left = isFinite(updatedRect.left) ? Math.max(0, Math.min(updatedRect.left, 10000)) : 0;
-      updatedRect.top = isFinite(updatedRect.top) ? Math.max(0, Math.min(updatedRect.top, 10000)) : 0;
-      updatedRect.width = isFinite(updatedRect.width) ? Math.max(1, Math.min(updatedRect.width, 10000)) : 1;
-      updatedRect.height = isFinite(updatedRect.height) ? Math.max(1, Math.min(updatedRect.height, 10000)) : 1;
-      // Wait for scroll, then take screenshot
       setTimeout(() => {
         chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataURL) => {
           if (chrome.runtime.lastError) {
-            console.warn("Failed to capture tab");
             return;
           }
-          // Store dataURL in storage for content script access
-          chrome.storage.local.set({tempDataURL: dataURL}, () => {
-            console.warn('Cropping args:', updatedRect.left, updatedRect.top, updatedRect.width, updatedRect.height);
-            // Crop the image in the content script
-            chrome.scripting.executeScript({
-              target: { tabId: tabId },
-              function: (left, top, width, height) => {
-                return new Promise((resolve) => {
-                  chrome.storage.local.get(['tempDataURL'], (result) => {
-                    const dataURL = result.tempDataURL;
-                    chrome.storage.local.remove('tempDataURL');
-                    const w = Math.floor(width);
-                    const h = Math.floor(height);
-                    if (w <= 0 || h <= 0) {
-                      resolve(dataURL); // Return original if invalid rect
-                      return;
-                    }
-                    const img = new Image();
-                    img.onload = () => {
-                      const canvas = document.createElement('canvas');
-                      const ctx = canvas.getContext('2d');
-                      canvas.width = w;
-                      canvas.height = h;
-                      ctx.drawImage(img, left, top, width, height, 0, 0, w, h);
-                      resolve(canvas.toDataURL('image/png'));
-                    };
-                    img.onerror = () => {
-                      resolve(dataURL);
-                    };
-                    img.src = dataURL;
-                  });
-                });
-              },
-              args: [updatedRect.left, updatedRect.top, updatedRect.width, updatedRect.height]
-            }, (results) => {
-              if (results && results[0] && results[0].result) {
-                downloadElementScreenshot(results[0].result);
-              }
-            });
+          cropElementScreenshot(dataURL, updatedRect, tabId, (croppedDataURL) => {
+            if (croppedDataURL) {
+              downloadElementScreenshot(croppedDataURL);
+            }
           });
         });
       }, 500);
