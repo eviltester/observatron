@@ -28,7 +28,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       $0 ? {outerHTML: $0.outerHTML, description: describeElement($0, '')} : null;
     `, (result, isException) => {
       if (!isException && result) {
-        chrome.storage.local.set({selectedElement: result});
+        // Merge with existing data to preserve selector and rect
+        chrome.storage.local.get(['selectedElement'], (existing) => {
+          const updated = { ...existing.selectedElement, ...result };
+          chrome.storage.local.set({selectedElement: updated});
+        });
       }
     });
   }

@@ -125,14 +125,18 @@ function requested(request, sender, sendResponse){
   if (request.method === 'saveNote') {
     saveNoteFromMessage(request.noteText, request.withScreenshot);
     if (request.withElementScreenshot) {
-      // Get selected element data and take screenshot
-      chrome.storage.local.get(['selectedElement', 'inspectedTabId'], function(result) {
-        const element = result.selectedElement;
-        const tabId = result.inspectedTabId;
-        if (element && tabId) {
-          takeElementScreenshot(element.selector, element.rect, tabId);
-        }
-      });
+      // Refresh element data first
+      chrome.runtime.sendMessage({type: 'updateElementData'});
+      setTimeout(() => {
+        // Get updated selected element data and take screenshot
+        chrome.storage.local.get(['selectedElement', 'inspectedTabId'], function(result) {
+          const element = result.selectedElement;
+          const tabId = result.inspectedTabId;
+          if (element && tabId) {
+            takeElementScreenshot(element.selector, element.rect, tabId);
+          }
+        });
+      }, 500);
     }
     sendResponse({success: true});
     return true; // Keep the message channel open for async response
@@ -628,6 +632,7 @@ function takeElementScreenshot(selector, rect, tabId) {
       return;
     }
     const windowId = tab.windowId;
+    console.warn('About to execute scrolling with selector:', selector);
     // Scroll element into view and get updated rect
     chrome.scripting.executeScript({
       target: { tabId: tabId },
@@ -662,14 +667,23 @@ function takeElementScreenshot(selector, rect, tabId) {
         return;
       }
       const result = results[0].result;
-      if (!result) {
-        console.warn("Element not found");
+      if (!result || typeof result !== 'object') {
+        console.warn("Invalid result");
         return;
       }
       const updatedRect = result;
-      if (!isFinite(updatedRect.left) || !isFinite(updatedRect.top) || !isFinite(updatedRect.width) || !isFinite(updatedRect.height)) {
+      if (typeof updatedRect.left !== 'number' || !isFinite(updatedRect.left) ||
+          typeof updatedRect.top !== 'number' || !isFinite(updatedRect.top) ||
+          typeof updatedRect.width !== 'number' || !isFinite(updatedRect.width) ||
+          typeof updatedRect.height !== 'number' || !isFinite(updatedRect.height)) {
+        console.warn("Invalid rect values");
         return;
       }
+      // Sanitize values to prevent serialization issues
+      updatedRect.left = isFinite(updatedRect.left) ? Math.max(0, Math.min(updatedRect.left, 10000)) : 0;
+      updatedRect.top = isFinite(updatedRect.top) ? Math.max(0, Math.min(updatedRect.top, 10000)) : 0;
+      updatedRect.width = isFinite(updatedRect.width) ? Math.max(1, Math.min(updatedRect.width, 10000)) : 1;
+      updatedRect.height = isFinite(updatedRect.height) ? Math.max(1, Math.min(updatedRect.height, 10000)) : 1;
       // Wait for scroll, then take screenshot
       setTimeout(() => {
         chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataURL) => {
@@ -679,6 +693,7 @@ function takeElementScreenshot(selector, rect, tabId) {
           }
           // Store dataURL in storage for content script access
           chrome.storage.local.set({tempDataURL: dataURL}, () => {
+            console.warn('Cropping args:', updatedRect.left, updatedRect.top, updatedRect.width, updatedRect.height);
             // Crop the image in the content script
             chrome.scripting.executeScript({
               target: { tabId: tabId },
