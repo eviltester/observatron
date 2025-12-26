@@ -720,6 +720,7 @@ function cropElementScreenshot(dataURL, rect, tabId, callback) {
 function takeElementScreenshot(selector, rect, tabId) {
   chrome.tabs.get(tabId, (tab) => {
     if (chrome.runtime.lastError || !tab) {
+      console.warn("Failed to get tab");
       return;
     }
     const windowId = tab.windowId;
