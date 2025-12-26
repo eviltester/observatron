@@ -5,7 +5,6 @@ function ContextMenus(){
     contextMenus = {};
     contextTypes = ["all", "page", "browser_action"];
 
-    // BUG - don't seem to be passing in functions seems to use globals from background.js, which works, but was not as intended
     this.init = function(downloadScreenshotFunction, saveAsMhtmlFunction, options){
         this.saveAsMhtml = saveAsMhtmlFunction;
         this.options = options;
@@ -18,6 +17,7 @@ function ContextMenus(){
     }
 
     function createMenu(id, title){
+
         return chrome.contextMenus.create(
             {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
     }

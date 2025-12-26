@@ -3,7 +3,7 @@
   "version": "0.95",
   "description": "The Observatron observes things in the browser",
   "background": {
-    "service_worker": "javascript/background.js"
+    "service_worker": "javascript/worker.js"
   },
   "commands": {
     "log-a-note": {
@@ -27,21 +27,22 @@
   "devtools_page": "devtools/devtools.html",
   "content_scripts": [
     {
-      "js": ["javascript/screenshotter.js"],
+      "js": ["javascript/page_dom_event_messages.js"],
       "run_at": "document_start",
       "matches": ["http://*/*", "https://*/*"]
     }
   ],
-  "permissions": [
-    "activeTab",
-    "downloads",
-    "webNavigation",
-    "pageCapture",
-    "storage",
-    "webRequest",
-    "contextMenus",
-    "sidePanel"
-  ],
+   "permissions": [
+     "activeTab",
+     "downloads",
+     "webNavigation",
+     "pageCapture",
+     "storage",
+     "webRequest",
+     "contextMenus",
+     "sidePanel",
+     "scripting"
+   ],
   "host_permissions": [
     "<all_urls>"
   ],

@@ -2,10 +2,11 @@
 
 /*
   create the timeout event objects
+  this prevents too many messages so we wait till the action is complete, e.g. stopped resizing
 */
-var resizingTimeout = {timeout: 0, milliseconds: 300, messageName: "resize"};
-var scrollingTimeout = {timeout: 0, milliseconds: 300, messageName: "scrolled"};
-var dblClickTimeout = {timeout: 0, milliseconds: 0, messageName: "screenshotdbl"};
+var resizingTimeout = {timeout: 0, milliseconds: 300, message: {method: "resize"}};
+var scrollingTimeout = {timeout: 0, milliseconds: 300, message: {method: "scrolled"}};
+var dblClickTimeout = {timeout: 0, milliseconds: 0, message: {method: "screenshotdbl"}};
 
 /*
   SETUP THE DEFAULTS FROM THE OBSERVATRON
@@ -13,16 +14,7 @@ var dblClickTimeout = {timeout: 0, milliseconds: 0, messageName: "screenshotdbl"
 
 var isObservatronEngaged = false;
 var engagedDomain = null;
-var isRuntimeConnected = true;
-var isPageFromCache = false;
 
-// Detect if page is loaded from back/forward cache
-window.addEventListener('pageshow', function(event) {
-  if (event.persisted) {
-    isPageFromCache = true;
-    console.log("Page loaded from back/forward cache");
-  }
-});
 
 // Listen for disconnection from background script
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -32,31 +24,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   }
 });
 
-// Check if runtime is still connected
-function checkRuntimeConnection() {
-  // Simple check without triggering runtime calls
-  if (typeof chrome === 'undefined' || !chrome.runtime) {
-    isRuntimeConnected = false;
-    return false;
-  }
 
-  // If runtime exists, assume it's connected (we'll handle errors in sendMessage)
-  if (!isRuntimeConnected) {
-    isRuntimeConnected = true;
-    // Try to refresh status, but don't fail if it doesn't work
-    try {
-      chrome.storage.local.get(['observatron'], function(result) {
-        if (result.observatron) {
-          isObservatronEngaged = result.observatron.engaged;
-        }
-      });
-    } catch (e) {
-      // Ignore storage errors
-    }
-  }
-  return true;
-}
-
+// TODO: other options might also have changed should handle that too
 chrome.storage.onChanged.addListener(function(changes, namespace) {
   if(namespace === "local"){
     if(changes.hasOwnProperty("observatron")){
@@ -78,6 +47,7 @@ chrome.storage.local.get(['observatron'], function(result) {
 
 // Request current status from background script
 if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
+  console.log("requesting current status");
   try {
     chrome.runtime.sendMessage({method: 'getStatus'}, function(response) {
       if (response) {
@@ -108,10 +78,13 @@ function setObservatronDefaults(options){
 }
 
 /*
+  Configure the event listeners to pass messages back to the worker.js
 
-Not really screenshot - event capture
+  NOTE: this does not capture element.value='value' changes because the attribute did not change
+  e.g. in 7charVal - can't detect the output message for invalid and valid
 */
 
+// capture input events
 window.addEventListener(
   "input",
   (e) => {
@@ -121,72 +94,55 @@ window.addEventListener(
         el instanceof HTMLTextAreaElement ||
         el instanceof HTMLSelectElement) {
 
-        try{
-            chrome.runtime.sendMessage({
-                method: "logUserEvent",
-                event: {
-                    eventType: "inputValueChanged",
-                    tag: el.tagName,
-                    name: el.name,
-                    id: el.id,
-                    value: el.value
-                  }
-                }, function(response) {
-                    if (chrome.runtime.lastError) {
-                       console.log("Error logging event status:", chrome.runtime.lastError.message);
-                     }
+            sendAMessage(
+                {
+                    method: "logUserEvent",
+                    event: {
+                        eventType: "inputValueChanged",
+                        tag: el.tagName,
+                        name: el.name,
+                        id: el.id,
+                        value: el.value
+                      }
                 }
             );
-        } catch (e) {
-               console.log("Failed to request status:", e);
-        }
     }
   },
   true // capture phase (important!)
 );
 
+// click, anywhere
 window.addEventListener(
   "click",
   (e) => {
     const el = e.target;
 
-        try{
-            chrome.runtime.sendMessage({
-                method: "logUserEvent",
-                event: {
-                    eventType: "clickedElement",
-                    tag: el.tagName,
-                    name: el.name,
-                    id: el.id,
-                    value: el.value,
-                    text: el.innerText.substring(0,50)
-                  }
-                }, function(response) {
-                    if (chrome.runtime.lastError) {
-                       console.log("Error logging event status:", chrome.runtime.lastError.message);
-                     }
-                }
-            );
-        } catch (e) {
-               console.log("Failed to request status:", e);
+    sendAMessage(
+        {
+            method: "logUserEvent",
+            event: {
+                eventType: "clickedElement",
+                tag: el.tagName,
+                name: el.name,
+                id: el.id,
+                value: el.value,
+                text: el.innerText.substring(0,50)
+              }
         }
+    );
+
   },
   true // capture phase (important!)
 );
 
 
 
-/*
-  Configure the event listeners to pass messages back to the background.js
-*/
+
 // MutationObserver for DOM changes
 var mutationObserver = new MutationObserver(function(mutations) {
   // Only log if observatron is engaged and on correct domain
   if (!isObservatronEngaged) return;
   if (!engagedDomain) return;
-  if (isPageFromCache) return;
-  if (!checkRuntimeConnection()) return;
-  if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) return;
 
   try {
     const currentDomain = window.location.hostname;
@@ -207,22 +163,15 @@ var mutationObserver = new MutationObserver(function(mutations) {
       };
     });
 
-    chrome.runtime.sendMessage({
-      method: "logUserEvent",
-      event: {
-        eventType: "domMutation",
-        mutations: serializedMutations
-      }
-    }, function(response) {
-      if (chrome.runtime.lastError) {
-        // Mark runtime as disconnected on persistent errors
-        if (chrome.runtime.lastError.message.includes('Extension context invalidated') ||
-            chrome.runtime.lastError.message.includes('message port closed')) {
-          isRuntimeConnected = false;
+    sendAMessage(
+        {
+          method: "logUserEvent",
+          event: {
+            eventType: "domMutation",
+            mutations: serializedMutations
+          }
         }
-        // Don't log expected errors to avoid console spam
-      }
-    });
+    );
   } catch (e) {
     console.log("Failed to log mutation event:", e);
   }
@@ -272,45 +221,49 @@ function sendScrollMessage(){
   Generic implementation for the message sending using timeouts
 */
 function sendAMessageWhenTimeoutComplete( timeoutVariable){
+
   if (timeoutVariable.timeout) {
     clearTimeout(timeoutVariable.timeout);
   }
 
   timeoutVariable.timeout = setTimeout(function() {
-      sendAMessage(timeoutVariable);
+      sendAMessage(timeoutVariable.message);
+      timeoutVariable.timeout=0;
   }, timeoutVariable.milliseconds);
 }
 
-function sendAMessage( timeoutVariable){
+/*
+    Generic sender for DOM based events to backend
+    implements all checks to make sure we only auto track the enabled and engaged domains
+*/
+function sendAMessage( message){
   // Only send if all conditions are met
   if (!isObservatronEngaged) return;
   if (!engagedDomain) return;
-  if (isPageFromCache) return;
-  if (!checkRuntimeConnection()) return;
-  if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) return;
 
   // Check if current page domain matches engaged domain
   try {
     const currentDomain = window.location.hostname;
+
+    // TODO: engagedDomain should be a class and support multiple domains
     if (currentDomain !== engagedDomain) return;
 
     // All checks passed, send the message
-    chrome.runtime.sendMessage({method: timeoutVariable.messageName}, function(response) {
+    chrome.runtime.sendMessage(message, function(response) {
       // Handle response or errors
       if (chrome.runtime.lastError) {
-        // Mark runtime as disconnected on persistent errors
         if (chrome.runtime.lastError.message.includes('Extension context invalidated') ||
             chrome.runtime.lastError.message.includes('message port closed')) {
-          isRuntimeConnected = false;
+            // ignore errors
         }
         // Don't log expected errors
+        console.log("observatron lastError " + chrome.runtime.lastError)
       }
     });
-    console.log(timeoutVariable.messageName + " sent");
-    timeoutVariable.timeout = 0;
+
   } catch (error) {
     // Extension context may be invalidated (service worker terminated)
-    isRuntimeConnected = false;
+    console.error("observatron error sending message: " + message.method);
   }
 }
 

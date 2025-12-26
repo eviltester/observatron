@@ -4,6 +4,8 @@
 // Import other scripts
 importScripts('observatron_options.js', 'context_menu.js', 'filenames.js');
 
+console.log("Service worker started/reloaded");
+
 var options = new Options();
 var engagedDomain = null;
 var sideBarSide= "left";
@@ -22,6 +24,13 @@ chrome.storage.onChanged.addListener(storageHasChanged);
 // TODO: add and remove listeners based on options, not just soft toggle on variables
 
 chrome.runtime.onMessage.addListener(requested);
+
+
+if (chrome && chrome.runtime && chrome.runtime.onSuspend) {
+  chrome.runtime.onSuspend.addListener(() => {
+    console.log("Service worker is being suspended/unloaded");
+  });
+}
 
 // Enable Disable on click
 chrome.action.onClicked.addListener((tab) => {
@@ -110,7 +119,6 @@ function changedOptions(){
 
 // useful info
 //https://stackoverflow.com/questions/13141072/how-to-get-notified-on-window-resize-in-chrome-browser
-//https://github.com/NV/chrome-o-tile/blob/master/chrome/background.js
 function requested(request, sender, sendResponse){
 
   // Handle saveNote regardless of engagement status
@@ -118,6 +126,15 @@ function requested(request, sender, sendResponse){
     saveNoteFromMessage(request.noteText, request.withScreenshot);
     sendResponse({success: true});
     return true; // Keep the message channel open for async response
+  }
+
+  if (request.method === 'saveSelectedElementNote') {
+    saveNoteFromMessage(request.noteText, request.withScreenshot);
+    if (request.withElementScreenshot) {
+      takeElementScreenshot(request.selector, request.rect, request.tabId);
+    }
+    sendResponse({success: true});
+    return true;
   }
 
   // Handle status requests
@@ -128,12 +145,12 @@ function requested(request, sender, sendResponse){
 
     if (request.method === 'takeScreenshot') {
         takeScreenshot();
-        return true;
+        return false;
     }
 
     if (request.method === 'savePage') {
         saveAsMhtml();
-        return true;
+        return false;
     }
 
     // all methods above can be triggered manually
@@ -143,13 +160,19 @@ function requested(request, sender, sendResponse){
   }
 
   if (request.method === 'logUserEvent') {
+    console.log(request);
+    console.log(sender);
+    console.log(sendResponse);
     logEvent(request.event);
+    sendResponse({success: true});
+    return true;
   }
 
   if (request.method === 'resize') {
     if(options.onResizeEvent){
       console.log("shot on resize");
       takeScreenshotIfWeCareAboutPage();
+      return false;
     }
   }
 
@@ -157,6 +180,7 @@ function requested(request, sender, sendResponse){
     if(options.onDoubleClickShot){
       console.log("shot on doubleclick");
       takeScreenshotIfWeCareAboutPage();
+      return false;
     }
   }
 
@@ -164,6 +188,7 @@ function requested(request, sender, sendResponse){
     if(options.onScrollEvent === true){
       console.log("shot on scrolled");
       takeScreenshotIfWeCareAboutPage();
+      return false;
     }
   }
 
@@ -590,6 +615,133 @@ function takeScreenshotIfWeCareAboutPage(){
 
         downloadScreenshot();
       });
+}
+
+function takeElementScreenshot(selector, rect, tabId) {
+  console.log('Taking element screenshot for tabId:', tabId, 'selector:', selector);
+  // Get the window ID for the tab
+  chrome.tabs.get(tabId, (tab) => {
+    if (chrome.runtime.lastError || !tab) {
+      console.warn("Failed to get tab:", chrome.runtime.lastError && chrome.runtime.lastError.message);
+      return;
+    }
+    const windowId = tab.windowId;
+    console.log('Window ID:', windowId);
+    // Scroll element into view and get updated rect
+    chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      function: (selector) => {
+        console.log('Evaluating XPath in page:', selector);
+        const el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        console.log('Found element in page:', el);
+        if (el) {
+          el.scrollIntoView({ block: 'center', inline: 'center' });
+          const rect = el.getBoundingClientRect();
+          console.log('Rect after scroll:', rect);
+          const visibleRect = {
+            left: Math.max(0, rect.left),
+            top: Math.max(0, rect.top),
+            width: Math.min(window.innerWidth - Math.max(0, rect.left), rect.width),
+            height: Math.min(window.innerHeight - Math.max(0, rect.top), rect.height)
+          };
+          console.log('Visible rect:', visibleRect);
+          const scale = window.devicePixelRatio;
+          console.log('Device pixel ratio:', scale);
+          return {
+            left: visibleRect.left * scale,
+            top: visibleRect.top * scale,
+            width: visibleRect.width * scale,
+            height: visibleRect.height * scale
+          };
+        }
+        return null;
+      },
+      args: [selector]
+    }, (results) => {
+      if (chrome.runtime.lastError || !results || !results[0]) {
+        console.warn("Script execution failed:", chrome.runtime.lastError && chrome.runtime.lastError.message);
+        return;
+      }
+      const result = results[0].result;
+      if (!result) {
+        console.warn("Element not found with selector:", selector);
+        return;
+      }
+      const updatedRect = result;
+      console.log('Updated rect:', updatedRect);
+      // Wait for scroll, then take screenshot
+      setTimeout(() => {
+        console.log('Taking screenshot for windowId:', windowId);
+        chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataURL) => {
+          if (chrome.runtime.lastError) {
+            console.warn("Failed to capture tab:", chrome.runtime.lastError.message);
+            return;
+          }
+          console.log('Captured dataURL length:', dataURL ? dataURL.length : 'null');
+          // Crop the image in the content script
+          chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            function: (dataURL, rect) => {
+              return new Promise((resolve) => {
+                const width = Math.floor(rect.width);
+                const height = Math.floor(rect.height);
+                console.log('Cropping in page: rect=', rect, 'width=', width, 'height=', height);
+                if (width <= 0 || height <= 0) {
+                  console.log('Invalid rect, returning original');
+                  resolve(dataURL); // Return original if invalid rect
+                  return;
+                }
+                const img = new Image();
+                img.onload = () => {
+                  console.log('Image loaded for cropping, size:', img.width, 'x', img.height);
+                  const canvas = document.createElement('canvas');
+                  const ctx = canvas.getContext('2d');
+                  canvas.width = width;
+                  canvas.height = height;
+                  ctx.drawImage(img, rect.left, rect.top, rect.width, rect.height, 0, 0, width, height);
+                  const cropped = canvas.toDataURL('image/png');
+                  console.log('Cropped dataURL length:', cropped.length);
+                  resolve(cropped);
+                };
+                img.onerror = () => {
+                  console.log('Image load failed, returning original');
+                  resolve(dataURL);
+                };
+                img.src = dataURL;
+              });
+            },
+            args: [dataURL, updatedRect]
+          }, (results) => {
+            if (results && results[0] && results[0].result) {
+              const croppedDataURL = results[0].result;
+              console.log('Cropped dataURL start:', croppedDataURL ? croppedDataURL.substring(0, 50) : 'null');
+              console.log('Cropped dataURL length:', croppedDataURL ? croppedDataURL.length : 'null');
+              downloadElementScreenshot(croppedDataURL);
+            } else {
+              console.warn('Cropping failed');
+            }
+          });
+        });
+      }, 2000);
+    });
+  });
+}
+
+
+
+function downloadElementScreenshot(dataURL) {
+  const downloadFileName = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png");
+  console.log('Download filename:', downloadFileName);
+  chrome.downloads.download({
+    url: dataURL,
+    filename: downloadFileName
+  }, function(downloadId) {
+    if (chrome.runtime.lastError) {
+      console.warn('Download failed:', chrome.runtime.lastError.message);
+    } else {
+      console.log("Downloaded element screenshot as " + downloadFileName + ", id:", downloadId);
+    }
+  });
 }
 
 function takeScreenshot(){
