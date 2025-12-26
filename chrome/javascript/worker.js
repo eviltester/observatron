@@ -124,18 +124,21 @@ function requested(request, sender, sendResponse){
   // Handle saveNote regardless of engagement status
   if (request.method === 'saveNote') {
     saveNoteFromMessage(request.noteText, request.withScreenshot);
+    if (request.withElementScreenshot) {
+      // Get selected element data and take screenshot
+      chrome.storage.local.get(['selectedElement', 'inspectedTabId'], function(result) {
+        const element = result.selectedElement;
+        const tabId = result.inspectedTabId;
+        if (element && tabId) {
+          takeElementScreenshot(element.selector, element.rect, tabId);
+        }
+      });
+    }
     sendResponse({success: true});
     return true; // Keep the message channel open for async response
   }
 
-  if (request.method === 'saveSelectedElementNote') {
-    saveNoteFromMessage(request.noteText, request.withScreenshot);
-    if (request.withElementScreenshot) {
-      takeElementScreenshot(request.selector, request.rect, request.tabId);
-    }
-    sendResponse({success: true});
-    return true;
-  }
+
 
   // Handle status requests
   if (request.method === 'getStatus') {
@@ -618,35 +621,31 @@ function takeScreenshotIfWeCareAboutPage(){
 }
 
 function takeElementScreenshot(selector, rect, tabId) {
-  console.log('Taking element screenshot for tabId:', tabId, 'selector:', selector);
   // Get the window ID for the tab
   chrome.tabs.get(tabId, (tab) => {
     if (chrome.runtime.lastError || !tab) {
-      console.warn("Failed to get tab:", chrome.runtime.lastError && chrome.runtime.lastError.message);
+      console.warn("Failed to get tab");
       return;
     }
     const windowId = tab.windowId;
-    console.log('Window ID:', windowId);
     // Scroll element into view and get updated rect
     chrome.scripting.executeScript({
       target: { tabId: tabId },
       function: (selector) => {
-        console.log('Evaluating XPath in page:', selector);
         const el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-        console.log('Found element in page:', el);
         if (el) {
           el.scrollIntoView({ block: 'center', inline: 'center' });
           const rect = el.getBoundingClientRect();
-          console.log('Rect after scroll:', rect);
+          if (!isFinite(rect.left) || !isFinite(rect.top) || !isFinite(rect.width) || !isFinite(rect.height)) {
+            return null;
+          }
           const visibleRect = {
             left: Math.max(0, rect.left),
             top: Math.max(0, rect.top),
             width: Math.min(window.innerWidth - Math.max(0, rect.left), rect.width),
             height: Math.min(window.innerHeight - Math.max(0, rect.top), rect.height)
           };
-          console.log('Visible rect:', visibleRect);
           const scale = window.devicePixelRatio;
-          console.log('Device pixel ratio:', scale);
           return {
             left: visibleRect.left * scale,
             top: visibleRect.top * scale,
@@ -659,70 +658,66 @@ function takeElementScreenshot(selector, rect, tabId) {
       args: [selector]
     }, (results) => {
       if (chrome.runtime.lastError || !results || !results[0]) {
-        console.warn("Script execution failed:", chrome.runtime.lastError && chrome.runtime.lastError.message);
+        console.warn("Script execution failed");
         return;
       }
       const result = results[0].result;
       if (!result) {
-        console.warn("Element not found with selector:", selector);
+        console.warn("Element not found");
         return;
       }
       const updatedRect = result;
-      console.log('Updated rect:', updatedRect);
+      if (!isFinite(updatedRect.left) || !isFinite(updatedRect.top) || !isFinite(updatedRect.width) || !isFinite(updatedRect.height)) {
+        return;
+      }
       // Wait for scroll, then take screenshot
       setTimeout(() => {
-        console.log('Taking screenshot for windowId:', windowId);
         chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataURL) => {
           if (chrome.runtime.lastError) {
-            console.warn("Failed to capture tab:", chrome.runtime.lastError.message);
+            console.warn("Failed to capture tab");
             return;
           }
-          console.log('Captured dataURL length:', dataURL ? dataURL.length : 'null');
-          // Crop the image in the content script
-          chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            function: (dataURL, rect) => {
-              return new Promise((resolve) => {
-                const width = Math.floor(rect.width);
-                const height = Math.floor(rect.height);
-                console.log('Cropping in page: rect=', rect, 'width=', width, 'height=', height);
-                if (width <= 0 || height <= 0) {
-                  console.log('Invalid rect, returning original');
-                  resolve(dataURL); // Return original if invalid rect
-                  return;
-                }
-                const img = new Image();
-                img.onload = () => {
-                  console.log('Image loaded for cropping, size:', img.width, 'x', img.height);
-                  const canvas = document.createElement('canvas');
-                  const ctx = canvas.getContext('2d');
-                  canvas.width = width;
-                  canvas.height = height;
-                  ctx.drawImage(img, rect.left, rect.top, rect.width, rect.height, 0, 0, width, height);
-                  const cropped = canvas.toDataURL('image/png');
-                  console.log('Cropped dataURL length:', cropped.length);
-                  resolve(cropped);
-                };
-                img.onerror = () => {
-                  console.log('Image load failed, returning original');
-                  resolve(dataURL);
-                };
-                img.src = dataURL;
-              });
-            },
-            args: [dataURL, updatedRect]
-          }, (results) => {
-            if (results && results[0] && results[0].result) {
-              const croppedDataURL = results[0].result;
-              console.log('Cropped dataURL start:', croppedDataURL ? croppedDataURL.substring(0, 50) : 'null');
-              console.log('Cropped dataURL length:', croppedDataURL ? croppedDataURL.length : 'null');
-              downloadElementScreenshot(croppedDataURL);
-            } else {
-              console.warn('Cropping failed');
-            }
+          // Store dataURL in storage for content script access
+          chrome.storage.local.set({tempDataURL: dataURL}, () => {
+            // Crop the image in the content script
+            chrome.scripting.executeScript({
+              target: { tabId: tabId },
+              function: (left, top, width, height) => {
+                return new Promise((resolve) => {
+                  chrome.storage.local.get(['tempDataURL'], (result) => {
+                    const dataURL = result.tempDataURL;
+                    chrome.storage.local.remove('tempDataURL');
+                    const w = Math.floor(width);
+                    const h = Math.floor(height);
+                    if (w <= 0 || h <= 0) {
+                      resolve(dataURL); // Return original if invalid rect
+                      return;
+                    }
+                    const img = new Image();
+                    img.onload = () => {
+                      const canvas = document.createElement('canvas');
+                      const ctx = canvas.getContext('2d');
+                      canvas.width = w;
+                      canvas.height = h;
+                      ctx.drawImage(img, left, top, width, height, 0, 0, w, h);
+                      resolve(canvas.toDataURL('image/png'));
+                    };
+                    img.onerror = () => {
+                      resolve(dataURL);
+                    };
+                    img.src = dataURL;
+                  });
+                });
+              },
+              args: [updatedRect.left, updatedRect.top, updatedRect.width, updatedRect.height]
+            }, (results) => {
+              if (results && results[0] && results[0].result) {
+                downloadElementScreenshot(results[0].result);
+              }
+            });
           });
         });
-      }, 2000);
+      }, 500);
     });
   });
 }
@@ -731,15 +726,12 @@ function takeElementScreenshot(selector, rect, tabId) {
 
 function downloadElementScreenshot(dataURL) {
   const downloadFileName = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png");
-  console.log('Download filename:', downloadFileName);
   chrome.downloads.download({
     url: dataURL,
     filename: downloadFileName
   }, function(downloadId) {
     if (chrome.runtime.lastError) {
-      console.warn('Download failed:', chrome.runtime.lastError.message);
-    } else {
-      console.log("Downloaded element screenshot as " + downloadFileName + ", id:", downloadId);
+      console.warn('Download failed');
     }
   });
 }

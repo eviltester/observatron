@@ -3,13 +3,15 @@
 document.getElementById('saveNote').addEventListener('click', function() {
     const noteText = document.getElementById('noteText').value;
     const withScreenshot = document.getElementById('withScreenshot').checked;
+    const withElementScreenshot = document.getElementById('withElementScreenshot').checked;
 
     if (noteText.trim()) {
         // Send message to background script
         chrome.runtime.sendMessage({
             method: 'saveNote',
             noteText: noteText,
-            withScreenshot: withScreenshot
+            withScreenshot: withScreenshot,
+            withElementScreenshot: withElementScreenshot
         }, function(response) {
             if (chrome.runtime.lastError) {
                 console.warn("Failed to save note:", chrome.runtime.lastError.message);
@@ -45,46 +47,33 @@ document.getElementById('savePage').addEventListener('click', function() {
     });
 });
 
-document.getElementById('saveSelectedElement').addEventListener('click', function() {
-    const withElementScreenshot = document.getElementById('withElementScreenshot').checked;
-
-    // Update element data if screenshot is requested
-    if (withElementScreenshot) {
-        window.parent.postMessage({type: 'updateElementData'}, '*');
-    }
-
-    // Wait a bit for update, then get from storage
+document.getElementById('addSelectedElement').addEventListener('click', function() {
+    // Update element data first
+    chrome.runtime.sendMessage({type: 'updateElementData'});
     setTimeout(() => {
-        chrome.storage.local.get(['selectedElement', 'inspectedTabId'], function(result) {
-            const element = result.selectedElement;
-            const tabId = result.inspectedTabId;
-            if (element && tabId) {
-                // Format as markdown and description
-                const markdown = `\`\`\`html\n${element.outerHTML}\n\`\`\``;
-                const description = element.description;
-
-                const noteText = `${markdown}\n\n${description}`;
-
-                // Send message to background script
-                chrome.runtime.sendMessage({
-                    method: 'saveSelectedElementNote',
-                    noteText: noteText,
-                    withScreenshot: false,
-                    withElementScreenshot: withElementScreenshot,
-                    selector: element.selector,
-                    rect: element.rect,
-                    tabId: tabId
-                }, function(response) {
-                    if (chrome.runtime.lastError) {
-                        console.warn("Failed to save selected element note:", chrome.runtime.lastError.message);
-                    }
-                });
-            } else {
-                alert("No element selected in Elements panel or tab ID not available.");
-            }
-        });
-    }, 200);
+        addElementToNote();
+    }, 100);
 });
+
+
+
+function addElementToNote() {
+    // Get selected element from storage
+    chrome.storage.local.get(['selectedElement'], function(result) {
+        const element = result.selectedElement;
+        if (element) {
+            // Format as markdown and description
+            const markdown = `\`\`\`html\n${element.outerHTML}\n\`\`\``;
+            const description = element.description;
+
+            const currentText = document.getElementById('noteText').value;
+            const newText = currentText ? currentText + '\n\n' + markdown + '\n\n' + description : markdown + '\n\n' + description;
+            document.getElementById('noteText').value = newText;
+        } else {
+            alert("No element selected in Elements panel.");
+        }
+    });
+}
 
 // Focus on textarea when page loads
 document.getElementById('noteText').focus();

@@ -8,9 +8,23 @@ chrome.devtools.panels.create(
 chrome.storage.local.set({inspectedTabId: chrome.devtools.inspectedWindow.tabId});
 
 // Listen for messages from sidepanel
-window.addEventListener('message', (event) => {
-  if (event.data.type === 'updateElementData') {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'updateElementData') {
     chrome.devtools.inspectedWindow.eval(`
+      function describeElement(el, indent) {
+        if (!el) return '';
+        let desc = indent + '- ' + el.tagName.toLowerCase();
+        if (el.id) desc += ' id="' + el.id + '"';
+        if (el.className) desc += ' class="' + el.className + '"';
+        if (el.name) desc += ' name="' + el.name + '"';
+        if (el.type) desc += ' type="' + el.type + '"';
+        if (el.value) desc += ' value="' + el.value + '"';
+        if (el.innerText && el.innerText.trim()) desc += ' text="' + el.innerText.trim().replace(/"/g, '\\\\"') + '"';
+        for (let child of el.children) {
+          desc += '\\n' + describeElement(child, indent + '  ');
+        }
+        return desc;
+      }
       $0 ? {outerHTML: $0.outerHTML, description: describeElement($0, '')} : null;
     `, (result, isException) => {
       if (!isException && result) {
