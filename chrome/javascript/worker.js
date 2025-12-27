@@ -343,7 +343,11 @@ async function showSidePanel(tabId, shown){
       enabled: shown
       }, ()=> {
             if(shown){
-                chrome.sidePanel.open({ tabId: tabId });
+                try{
+                    chrome.sidePanel.open({ tabId: tabId });
+                }catch(e){
+                    console.log("showSidePanel: " + e);
+                }
             }
         }
     );

@@ -3,93 +3,17 @@
         <title>Observatron Options</title>
     </head>
     <body>
-            
-        <h1 id="optionsheading">Observatron Options</h1>
-        
-        <div>
-            <button id="defaults">Set To Defaults</button>
-        </div>
-
-        <h2>Screenshots Configuration</h2>
-        <p>Take screenshots based on various events:</p>
-
-        <label>
-                <input type="checkbox" id="onscroll">
-                On Scroll
-        </label>
-        <br/>
-        <label>
-                <input type="checkbox" id="onresize">
-                On Resize
-        </label>
-        <br/>
-        <label>
-                <input type="checkbox" id="ondoubleclick">
-                Screenshot On Double click
-        </label>
-        <br/>
-
-        <h2>Logging Configuration</h2>
-        <p>Take screenshots, mhtml and json logs based on various events:</p>
-
-        <label>
-                <input type="checkbox" id="onpageload">
-                On Page Load
-        </label>
-        <br/>
-        <label>
-                <input type="checkbox" id="onpageupdated">
-                On Page Updated
-        </label>
-        <br/>
-        <label>
-                <input type="checkbox" id="onpostformsubmit">
-                Log POST form contents to a file
-        </label>
-
-        <h2>Output Configuration</h2>
-        <br/>
-        <label>
-                <input type="text" id="filepath">
-                FilePath in Downloads:
-        </label>
-        <br/>
-
-        <label>
-                <input type="text" id="fileprefix">
-                File Prefix:
-        </label>
-        <br/>
-
-        <h2>Timing Configuration</h2>
-
-        <label>
-                <input type="number" id="scrolling_timeout">
-                Scrolling Timeout Milliseconds:
-        </label>
-        <br/>
-
-        <label>
-                <input type="number" id="resize_timeout">
-                Resize Timeout Milliseconds:
-        </label>
-        <br/>
-
-        <h2>Remember to save changes</h2>
-        <div id="status"></div>
-        <button id="save">Save</button>
+        <div id="options-container"></div>
 
         <hr/>
 
         <div id="credits">
-
-                <ul>
-                    <li><a href="https://github.com/eviltester/observatron" target="_blank">The Oservatron on Github</a></li>
-                    <li><a href="https://eviltester.com" target="_blank">EvilTester.com blog, books, and courses</a></li>
-                    <li><a href="https://compendiumdev.co.uk" target="_blank">Compendium Developments Ltd Consultancy</a></li>
-                </ul>
+            <ul>
+                <li><a href="https://github.com/eviltester/observatron" target="_blank">The Oservatron on Github</a></li>
+                <li><a href="https://eviltester.com" target="_blank">EvilTester.com blog, books, and courses</a></li>
+                <li><a href="https://compendiumdev.co.uk" target="_blank">Compendium Developments Ltd Consultancy</a></li>
+            </ul>
         </div>
-
 
         <script src="../javascript/observatron_options.js"></script>
         <script src="options.js"></script>

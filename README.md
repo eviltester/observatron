@@ -248,6 +248,9 @@ Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
 
 # Versions
 
+- 0.97 options
+   - add the options to the notes screen for easier access
+     - still available as Manage Extension opions 
 - 0.96 more events and sidebar
    - notes:
      - removed notes input box and added page and sidebar and dev tools extension
