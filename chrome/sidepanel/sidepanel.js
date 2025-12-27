@@ -83,11 +83,71 @@ function addElementToNote() {
 document.getElementById('noteText').focus();
 
 // Notes collection functionality
+let allNotes = [];
+
 function loadNotes() {
     chrome.storage.local.get(['observatron_notes'], function(result) {
-        const notes = result.observatron_notes || [];
-        renderNotes(notes);
+        allNotes = result.observatron_notes || [];
+        populateTypeFilter();
+        filterAndRenderNotes();
     });
+}
+
+function populateTypeFilter() {
+    const typeFilter = document.getElementById('typeFilter');
+    const currentValue = typeFilter.value;
+
+    // Clear existing options except the first 5 (all, note, question, todo, bug)
+    while (typeFilter.options.length > 5) {
+        typeFilter.remove(5);
+    }
+
+    // Get unique custom types (types that start with @ or are not standard types)
+    const standardTypes = ['note', 'question', 'todo', 'bug'];
+    const customTypes = new Set();
+
+    allNotes.forEach(note => {
+        if (!standardTypes.includes(note.type)) {
+            customTypes.add(note.type);
+        }
+    });
+
+    // Add custom types to dropdown
+    Array.from(customTypes).sort().forEach(type => {
+        const option = document.createElement('option');
+        option.value = type;
+        option.textContent = type.charAt(0).toUpperCase() + type.slice(1) + 's'; // Pluralize
+        typeFilter.appendChild(option);
+    });
+
+    // Restore previous selection if it still exists
+    if (Array.from(typeFilter.options).some(option => option.value === currentValue)) {
+        typeFilter.value = currentValue;
+    } else {
+        typeFilter.value = 'all';
+    }
+}
+
+function filterAndRenderNotes() {
+    const typeFilter = document.getElementById('typeFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+
+    let filteredNotes = allNotes;
+
+    // Filter by type
+    if (typeFilter !== 'all') {
+        filteredNotes = filteredNotes.filter(note => note.type === typeFilter);
+    }
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+        filteredNotes = filteredNotes.filter(note => {
+            const effectiveStatus = note.type === 'note' ? 'closed' : note.status;
+            return effectiveStatus === statusFilter;
+        });
+    }
+
+    renderNotes(filteredNotes);
 }
 
 function truncateNoteText(text) {
@@ -226,7 +286,9 @@ function toggleNoteExpansion(noteId) {
 // Listen for storage changes to update notes display
 chrome.storage.onChanged.addListener(function(changes, namespace) {
     if (namespace === 'local' && changes.observatron_notes) {
-        loadNotes();
+        allNotes = changes.observatron_notes.newValue || [];
+        populateTypeFilter();
+        filterAndRenderNotes();
     }
 });
 
@@ -234,7 +296,18 @@ chrome.storage.onChanged.addListener(function(changes, namespace) {
 document.addEventListener('DOMContentLoaded', function() {
     loadNotes();
     document.getElementById('saveNotes').addEventListener('click', saveNotesAs);
+
+    // Add filter event listeners
+    document.getElementById('typeFilter').addEventListener('change', filterAndRenderNotes);
+    document.getElementById('statusFilter').addEventListener('change', filterAndRenderNotes);
+    document.getElementById('clearFilters').addEventListener('click', clearFilters);
 });
+
+function clearFilters() {
+    document.getElementById('typeFilter').value = 'all';
+    document.getElementById('statusFilter').value = 'all';
+    filterAndRenderNotes();
+}
 
 function saveNotesAs() {
     chrome.storage.local.get(['observatron_notes'], function(result) {

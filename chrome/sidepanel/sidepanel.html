@@ -39,6 +39,23 @@
       <div style="margin-bottom: 10px;">
           <button id="saveNotes">Save Notes As...</button>
       </div>
+      <div style="margin-bottom: 10px; padding: 5px; border: 1px solid #ccc;">
+          <label>Filter by Type: </label>
+          <select id="typeFilter">
+              <option value="all">All Types</option>
+              <option value="note">Notes</option>
+              <option value="question">Questions</option>
+              <option value="todo">Todos</option>
+              <option value="bug">Bugs</option>
+          </select>
+          <label style="margin-left: 10px;">Status: </label>
+          <select id="statusFilter">
+              <option value="all">All Status</option>
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+          </select>
+          <button id="clearFilters" style="margin-left: 10px;">Clear Filters</button>
+      </div>
       <div id="notes-container"></div>
 
       <script src="sidepanel.js"></script>
