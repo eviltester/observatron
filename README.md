@@ -193,6 +193,59 @@ This extension is open source.
 
 Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
 
+
+---
+
+## Capabilities, ToDos
+
+### Does not:
+
+- capture keypresses
+    - it captures 'input' events
+    - i.e. changing checkbox, input field, etc.
+- log alert creation, display or interaction
+- capture http traffic - suggest using a proxy which exports HAR files e.g. Zap Proxy
+    - does capture form posts as post events
+
+### Does:
+
+- only automatically capture events for the domain on which it was enabled
+- capture mutation events
+    - e.g. text changing
+    - buttons added
+- save screenshots of visible screen area
+    - on resize
+    - on scroll
+    - on double click
+- save screenshots of selected element
+    - use the sidebar view, select element, create a note with 'include element screenshot'
+- capture form post events (when configured)
+- save manual notes
+
+
+### TODO:
+
+- show options in sidebar to make easier to maintain
+- configurable data sizes (mutation text, clicked target text)
+- resize log with screensize change, not just screenshot
+- mouse events - move
+- session id configurable in options to create configurable subfolder (below date)
+- add status to special note type (open, closed) (question, bug, etc.)
+    - track status, open closed as event log
+- show notes in side-bar
+    - sequential based on time stamp
+    - by type and status (open, closed)
+        - question
+        - bug
+        - todo
+        - custom
+- save notes button
+    - requires - tracking internally, not just event logging
+        - auto save to file every (X minutes, after every note, config)
+
+
+---
+
 # Versions
 
 - 0.96 more events and sidebar
