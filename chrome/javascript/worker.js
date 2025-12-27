@@ -123,7 +123,7 @@ function requestMethodHandler(request, sender, sendResponse){
 
   // Handle saveNote regardless of engagement status
   if (request.method === 'saveNote') {
-    saveNoteFromMessage(request.noteText, request.withScreenshot);
+    saveNoteFromMessage(request.noteText, request.withScreenshot, request.withElementScreenshot);
     if (request.withElementScreenshot) {
       // Refresh element data first
       chrome.runtime.sendMessage({type: 'updateElementData'});
@@ -409,7 +409,7 @@ function logANote(){
   chrome.tabs.create({url: chrome.runtime.getURL('sidepanel/sidepanel.html')});
 }
 
-function saveNoteFromMessage(noteText, withScreenshot) {
+function saveNoteFromMessage(noteText, withScreenshot, withElementScreenshot) {
   var noteId = Math.floor(Date.now());
 
   // is it a special note?
@@ -420,11 +420,34 @@ function saveNoteFromMessage(noteText, withScreenshot) {
 
   var noteToLog = getSpecialNoteTypeFromString(noteText);
   noteToLog.id = noteId.toString();
+  noteToLog.timestamp = new Date().toISOString();
+  noteToLog.status = noteToLog.type === 'note' ? 'closed' : 'open'; // Default status
+
+  // Add screenshot filenames if requested
+  noteToLog.screenshots = [];
+  if (withScreenshot) {
+    var screenshotFilename = getFileName(options.filepath, options.fileprefix, "screenshot_note_" + noteToLog.id, "jpg");
+    noteToLog.screenshots.push(screenshotFilename);
+  }
+  if (withElementScreenshot) {
+    var elementScreenshotFilename = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png");
+    noteToLog.screenshots.push(elementScreenshotFilename);
+  }
+
+  // Store note in local storage
+  chrome.storage.local.get(['observatron_notes'], function(result) {
+    var notes = result.observatron_notes || [];
+    notes.push(noteToLog);
+    chrome.storage.local.set({observatron_notes: notes});
+  });
 
   // TODO store screenshot name in the note as a screenshot property
   downloadAsLog(noteToLog.type+"_"+noteToLog.id, noteToLog);
   if(withScreenshot){
     downloadScreenshot("_note_" + noteToLog.id);
+  }
+  if (withElementScreenshot) {
+    // Element screenshot handling is done in the message handler
   }
 }
 
