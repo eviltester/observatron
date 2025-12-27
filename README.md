@@ -248,9 +248,15 @@ Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
 
 # Versions
 
-- 0.97 options
+- 0.97 options and notes
    - add the options to the notes screen for easier access
-     - still available as Manage Extension opions 
+     - still available as Manage Extension options
+   - improve note-taking
+     - added note tracking in memory
+     - save to disk as text report
+     - save/load to disk from json
+     - open/close questions, todos, bugs for local session tracking
+     - filter notes in memory e.g. see open todos
 - 0.96 more events and sidebar
    - notes:
      - removed notes input box and added page and sidebar and dev tools extension

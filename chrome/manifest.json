@@ -1,7 +1,7 @@
 {
-  "name": "Test Observer - The Observatron",
+  "name": "Exploratory Testing Tool - Test Observer - The Observatron",
   "version": "0.97",
-  "description": "The Observatron observes things in the browser",
+  "description": "The Exploratory Testing Observatron Tool observes things in the browser, automatically creates notes and screenshots and helps you track your testing session",
   "background": {
     "service_worker": "javascript/worker.js"
   },
