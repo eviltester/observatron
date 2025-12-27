@@ -396,6 +396,7 @@ chrome.storage.onChanged.addListener(function(changes, namespace) {
 document.addEventListener('DOMContentLoaded', function() {
     loadNotes();
     document.getElementById('saveNotes').addEventListener('click', saveNotesAs);
+    document.getElementById('clearNotes').addEventListener('click', clearNotes);
 
     // Add filter event listeners
     document.getElementById('typeFilter').addEventListener('change', filterAndRenderNotes);
@@ -407,6 +408,21 @@ function clearFilters() {
     document.getElementById('typeFilter').value = 'all';
     document.getElementById('statusFilter').value = 'all';
     filterAndRenderNotes();
+}
+
+function clearNotes() {
+    const confirmed = confirm('Are you sure you want to clear all notes? This action cannot be undone.');
+    if (confirmed) {
+        // Clear from storage
+        chrome.storage.local.remove(['observatron_notes'], function() {
+            // Clear from memory
+            allNotes = [];
+            // Update UI
+            populateTypeFilter(); // This will clear custom types from filter
+            filterAndRenderNotes();
+            console.log('All notes cleared');
+        });
+    }
 }
 
 function saveNotesAs() {
