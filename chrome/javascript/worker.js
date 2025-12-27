@@ -23,7 +23,7 @@ chrome.storage.onChanged.addListener(storageHasChanged);
 
 // TODO: add and remove listeners based on options, not just soft toggle on variables
 
-chrome.runtime.onMessage.addListener(requested);
+chrome.runtime.onMessage.addListener(requestMethodHandler);
 
 
 if (chrome && chrome.runtime && chrome.runtime.onSuspend) {
@@ -119,7 +119,7 @@ function changedOptions(){
 
 // useful info
 //https://stackoverflow.com/questions/13141072/how-to-get-notified-on-window-resize-in-chrome-browser
-function requested(request, sender, sendResponse){
+function requestMethodHandler(request, sender, sendResponse){
 
   // Handle saveNote regardless of engagement status
   if (request.method === 'saveNote') {
@@ -402,7 +402,7 @@ function commandHandler(command){
 
 function logANote(){
   // Open note taking page
-  chrome.tabs.create({url: chrome.runtime.getURL('note.html')});
+  chrome.tabs.create({url: chrome.runtime.getURL('sidepanel/sidepanel.html')});
 }
 
 function saveNoteFromMessage(noteText, withScreenshot) {

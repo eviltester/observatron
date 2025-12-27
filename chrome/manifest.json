@@ -1,6 +1,6 @@
 {
   "name": "Test Observer - The Observatron",
-  "version": "0.95",
+  "version": "0.96",
   "description": "The Observatron observes things in the browser",
   "background": {
     "service_worker": "javascript/worker.js"

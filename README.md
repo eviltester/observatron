@@ -1,8 +1,14 @@
 # Observatron
 
-A prototype exploratory testing observation tool for Chrome browser.
+A prototype exploratory testing observation tool for Chrome browser. Designed to allow
+people who are performing Exploratory Testing on a Web App to:
 
-This is an under-development Chrome plugin.
+- track notes
+- take screenshots
+- log events
+
+These are saved in a folder for future analysis e.g. by other tools, or by AI Coding Agents with
+file access.
 
 You can download this from the Chrome Store:
 
@@ -23,6 +29,8 @@ To use:
 - Click the red button [Engage the Observatron] to start automated observing
 - the button will turn green
 - Click the green button [Disengage the observatron] to finish automated observing
+
+Only the domain you engage observatron will have automated events logged, manual logs can be created from the notes view on any page.
 
 As you browse and test, you will see files download based on the configured options.
 
@@ -68,11 +76,15 @@ You can configure key mappings using [chrome://extensions/configureCommands](chr
 
 ## Taking Notes
 
-The note taking functionality uses JavaScript 'prompt' input boxes. It ain't pretty, its functional
+Initiate a note taking using the separate web page by:
+- using the context menu
+- the keyboard short cut
 
-Either initiate a note taking by using the context menu or the keyboard short cut.
+Or "Show Side Panel" to show the side panel with note taking functionality.
 
-When faced with the prompt:
+Or use the Observatron panel in the dev tools.
+
+When faced with the dialog:
 
 > Add Note to log 
 > (? question, ! bug, - todo, @customtype)
@@ -102,7 +114,15 @@ When you save a screenshot it will have `_note_noteid` at the end of the filenam
 
 e.g. "obs_2019-02-20-11-32-57-314-screenshot-1201x1104_note_1550662375417.jpg"
 
-This can help you cross reference screenshots to notes, although the timestamping should mean that the screenshot is the next file saved after the note.
+This can help you cross-reference screenshots to notes, although the timestamping should mean that the screenshot is the next file saved after the note.
+
+## Keyboard Shortcuts
+
+To create a note:
+
+- "default": "Ctrl+Shift+L",
+- "mac": "Command+Shift+L"
+
 
 ---
 
@@ -125,7 +145,7 @@ The options screen, right click from context menu or manage from `chrome://exten
 
 ---
 
-Copyright 2019 Compendium Developments Ltd, Alan Richardson
+Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
 
 
 https://eviltester.com
@@ -175,6 +195,22 @@ Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
 
 # Versions
 
+- 0.96 more events and sidebar
+   - notes:
+     - removed notes input box and added page and sidebar and dev tools extension
+     - add notes screen shows when adhoc "take note" used from context menu
+     - sidebar can be shown from context menu - useful when you want to see which element you are screenshotting
+     - devtools tab - useful when you want to do more manual note tracking for general testing
+   - enabled domain
+     - automated event generation and screenshots is only enabled for the domain that you start the observatron on
+     - manual events can be created using notes for any domain without switching on the observatron
+  - element screenshots
+    - when creating a note, can select an element in the dev tools element view and output a screenshot of 'just the element' with the note.
+    - required adding scripting permission
+  - more event capture
+    - mutation
+    - click
+    - input
 - 0.95 updated to manifest v3 and added much more error handling - 20251222
 - 0.92 initial version
 

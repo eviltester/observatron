@@ -40,18 +40,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Store selected element info in storage for sidepanel access
 chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
+
+  // TODO: improve getXPath generation
+  // when checking parent node, if that has an id then stop at that point
+  // when checking parent node, if it has a data-id which is unique then use that and stop at that point
+  // when checking node or parent node, if it has a data-testid which is unique then use that and stop at that point
   chrome.devtools.inspectedWindow.eval(`
     function getXPath(el) {
       if (el.id) return '//*[@id="' + el.id + '"]';
       let path = [];
       while (el.nodeType === Node.ELEMENT_NODE) {
         let index = 1;
-        let sibling = el.previousSibling;
-        while (sibling) {
-          if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === el.nodeName) {
+        let previousSibling = el.previousSibling;
+        while (previousSibling) {
+          if (previousSibling.nodeType === Node.ELEMENT_NODE && previousSibling.nodeName === el.nodeName) {
             index++;
           }
-          sibling = sibling.previousSibling;
+          previousSibling = sibling.previousSibling;
         }
         let tagName = el.nodeName.toLowerCase();
         let pathSegment = index === 1 ? tagName : tagName + '[' + index + ']';
