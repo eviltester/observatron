@@ -37,7 +37,13 @@
 
       <h2>Notes Collection</h2>
       <div style="margin-bottom: 10px;">
+          <select id="exportFormat" style="margin-right: 10px;">
+              <option value="txt">Text (.txt)</option>
+              <option value="json">JSON (.json)</option>
+          </select>
           <button id="saveNotes">Save Notes As...</button>
+          <button id="loadNotes" style="margin-left: 10px;">Load Notes</button>
+          <input type="file" id="notesFileInput" accept=".json" style="display: none;">
           <button id="clearNotes" style="margin-left: 10px; background-color: #ff6b6b; color: white;">Clear All Notes</button>
       </div>
       <div style="margin-bottom: 10px; padding: 5px; border: 1px solid #ccc;">

@@ -396,6 +396,10 @@ chrome.storage.onChanged.addListener(function(changes, namespace) {
 document.addEventListener('DOMContentLoaded', function() {
     loadNotes();
     document.getElementById('saveNotes').addEventListener('click', saveNotesAs);
+    document.getElementById('loadNotes').addEventListener('click', () => {
+        document.getElementById('notesFileInput').click();
+    });
+    document.getElementById('notesFileInput').addEventListener('change', loadNotesFromFile);
     document.getElementById('clearNotes').addEventListener('click', clearNotes);
 
     // Add filter event listeners
@@ -408,6 +412,60 @@ function clearFilters() {
     document.getElementById('typeFilter').value = 'all';
     document.getElementById('statusFilter').value = 'all';
     filterAndRenderNotes();
+}
+
+function loadNotesFromFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const loadedNotes = JSON.parse(e.target.result);
+
+            // Validate that it's an array
+            if (!Array.isArray(loadedNotes)) {
+                throw new Error('Invalid format: expected an array of notes');
+            }
+
+            // Basic validation of note structure
+            for (const note of loadedNotes) {
+                if (!note.id || !note.text || !note.type || !note.timestamp) {
+                    throw new Error('Invalid note structure: missing required fields');
+                }
+                if (!['note', 'question', 'todo', 'bug'].includes(note.type) && !note.type.startsWith('@')) {
+                    // Allow custom types starting with @
+                }
+            }
+
+            // If validation passes, confirm replacement
+            const confirmed = confirm(`Found ${loadedNotes.length} notes in the file. This will replace all existing notes. Continue?`);
+            if (confirmed) {
+                // Save to storage
+                chrome.storage.local.set({observatron_notes: loadedNotes}, function() {
+                    // Update memory
+                    allNotes = loadedNotes;
+                    // Update UI
+                    populateTypeFilter();
+                    filterAndRenderNotes();
+                    console.log(`Loaded ${loadedNotes.length} notes from file`);
+                    alert(`Successfully loaded ${loadedNotes.length} notes from file.`);
+                });
+            }
+        } catch (error) {
+            alert('Error loading notes: ' + error.message);
+            console.error('Error loading notes:', error);
+        }
+    };
+
+    reader.onerror = function() {
+        alert('Error reading file');
+    };
+
+    reader.readAsText(file);
+
+    // Clear the input so the same file can be selected again
+    event.target.value = '';
 }
 
 function clearNotes() {
@@ -426,6 +484,8 @@ function clearNotes() {
 }
 
 function saveNotesAs() {
+    const format = document.getElementById('exportFormat').value;
+
     chrome.storage.local.get(['observatron_notes'], function(result) {
         const notes = result.observatron_notes || [];
 
@@ -434,44 +494,55 @@ function saveNotesAs() {
             return;
         }
 
-        // Sort notes by creation time (oldest first)
-        notes.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        let content, mimeType, extension;
 
-        // Format notes
-        let content = '';
-        notes.forEach(note => {
-            const date = new Date(note.timestamp);
-            const formattedDate = date.toLocaleString(); // Readable date/time
-            const noteType = note.type.toUpperCase();
+        if (format === 'json') {
+            // JSON format
+            content = JSON.stringify(notes, null, 2);
+            mimeType = 'application/json';
+            extension = 'json';
+        } else {
+            // Text format (default)
+            // Sort notes by creation time (oldest first)
+            const sortedNotes = [...notes].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-            // Add status for special notes (question, todo, bug, custom)
-            const isSpecialNote = ['question', 'todo', 'bug'].includes(note.type) || note.type.startsWith('@');
-            const statusText = isSpecialNote ? ` : ${note.status.toUpperCase()}` : '';
+            content = '';
+            sortedNotes.forEach(note => {
+                const date = new Date(note.timestamp);
+                const formattedDate = date.toLocaleString(); // Readable date/time
+                const noteType = note.type.toUpperCase();
 
-            content += `${formattedDate}: ${noteType}${statusText}\n\n`;
-            content += `${note.text}\n`;
+                // Add status for special notes (question, todo, bug, custom)
+                const isSpecialNote = ['question', 'todo', 'bug'].includes(note.type) || note.type.startsWith('@');
+                const statusText = isSpecialNote ? ` : ${note.status.toUpperCase()}` : '';
 
-            // Add closing note if present
-            if (note.closingNote) {
-                content += `\nClosed: ${note.closingNote}\n`;
-            }
+                content += `${formattedDate}: ${noteType}${statusText}\n\n`;
+                content += `${note.text}\n`;
 
-            // Add screenshot filenames if any
-            if (note.screenshots && note.screenshots.length > 0) {
-                content += '\nScreenshots:\n';
-                note.screenshots.forEach(filename => {
-                    content += `- ${filename}\n`;
-                });
-            }
+                // Add closing note if present
+                if (note.closingNote) {
+                    content += `\nClosed: ${note.closingNote}\n`;
+                }
 
-            content += '\n';
-        });
+                // Add screenshot filenames if any
+                if (note.screenshots && note.screenshots.length > 0) {
+                    content += '\nScreenshots:\n';
+                    note.screenshots.forEach(filename => {
+                        content += `- ${filename}\n`;
+                    });
+                }
+
+                content += '\n';
+            });
+            mimeType = 'text/plain';
+            extension = 'txt';
+        }
 
         // Create blob and download
-        const blob = new Blob([content], { type: 'text/plain' });
+        const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
 
-        const filename = `observatron_notes_${new Date().toISOString().split('T')[0]}.txt`;
+        const filename = `observatron_notes_${new Date().toISOString().split('T')[0]}.${extension}`;
 
         chrome.downloads.download({
             url: url,
