@@ -36,34 +36,40 @@
       <label><input type="checkbox" id="withElementScreenshot"> Include element screenshot</label>
 
       <h2>Notes Collection</h2>
-      <div style="margin-bottom: 10px;">
-          <select id="exportFormat" style="margin-right: 10px;">
-              <option value="txt">Text (.txt)</option>
-              <option value="json">JSON (.json)</option>
-          </select>
-          <button id="saveNotes">Save Notes As...</button>
-          <button id="loadNotes" style="margin-left: 10px;">Load Notes</button>
-          <input type="file" id="notesFileInput" accept=".json" style="display: none;">
-          <button id="clearNotes" style="margin-left: 10px; background-color: #ff6b6b; color: white;">Clear All Notes</button>
-      </div>
-      <div style="margin-bottom: 10px; padding: 5px; border: 1px solid #ccc;">
-          <label>Filter by Type: </label>
-          <select id="typeFilter">
-              <option value="all">All Types</option>
-              <option value="note">Notes</option>
-              <option value="question">Questions</option>
-              <option value="todo">Todos</option>
-              <option value="bug">Bugs</option>
-          </select>
-          <label style="margin-left: 10px;">Status: </label>
-          <select id="statusFilter">
-              <option value="all">All Status</option>
-              <option value="open">Open</option>
-              <option value="closed">Closed</option>
-          </select>
-          <button id="clearFilters" style="margin-left: 10px;">Clear Filters</button>
-      </div>
-      <div id="notes-container"></div>
+      <details style="margin-bottom: 10px;">
+          <summary>Save/Load/Clear Notes</summary>
+          <div style="margin-top: 5px;">
+              <select id="exportFormat" style="margin-right: 10px;">
+                  <option value="txt">Text (.txt)</option>
+                  <option value="json">JSON (.json)</option>
+              </select>
+              <button id="saveNotes">Save Notes As...</button>
+              <button id="loadNotes" style="margin-left: 10px;">Load Notes</button>
+              <input type="file" id="notesFileInput" accept=".json" style="display: none;">
+              <button id="clearNotes" style="margin-left: 10px; background-color: #ff6b6b; color: white;">Clear All Notes</button>
+          </div>
+      </details>
+      <details open style="margin-bottom: 10px;">
+          <summary>Notes Collection</summary>
+          <div style="margin-top: 5px; padding: 5px; border: 1px solid #ccc;">
+              <label>Filter by Type: </label>
+              <select id="typeFilter">
+                  <option value="all">All Types</option>
+                  <option value="note">Notes</option>
+                  <option value="question">Questions</option>
+                  <option value="todo">Todos</option>
+                  <option value="bug">Bugs</option>
+              </select>
+              <label style="margin-left: 10px;">Status: </label>
+              <select id="statusFilter">
+                  <option value="all">All Status</option>
+                  <option value="open">Open</option>
+                  <option value="closed">Closed</option>
+              </select>
+              <button id="clearFilters" style="margin-left: 10px;">Clear Filters</button>
+          </div>
+          <div id="notes-container"></div>
+      </details>
 
       <script src="sidepanel.js"></script>
     <script src="../javascript/observatron_options.js"></script>

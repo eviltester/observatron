@@ -211,13 +211,6 @@ function renderNotes(notes) {
         // Only show status button for certain note types
         const showStatusButton = ['question', 'todo', 'bug'].includes(note.type) || note.type.startsWith('@');
 
-        if (showStatusButton) {
-            const statusButton = document.createElement('button');
-            statusButton.textContent = note.status === 'open' ? 'Close' : 'Open';
-            statusButton.onclick = () => toggleNoteStatus(note.id);
-            noteDiv.appendChild(statusButton);
-        }
-
         noteDiv.appendChild(typeSpan);
         noteDiv.appendChild(textSpan);
 
@@ -230,6 +223,26 @@ function renderNotes(notes) {
             expandButton.setAttribute('data-note-id', note.id);
             expandButton.addEventListener('click', () => toggleNoteExpansion(note.id));
             noteDiv.appendChild(expandButton);
+        }
+
+        // Add status button - position depends on current status
+        if (showStatusButton) {
+            const statusButton = document.createElement('button');
+            statusButton.textContent = note.status === 'open' ? 'Close' : 'Open';
+            statusButton.onclick = () => toggleNoteStatus(note.id);
+
+            if (note.status === 'open') {
+                // "Close" button goes at the beginning
+                noteDiv.insertBefore(statusButton, noteDiv.firstChild);
+            } else {
+                // "Open" button goes after the expand button (or text span if no expand button)
+                const insertAfter = isTruncated ? noteDiv.querySelector('.expand-button') : textSpan;
+                if (insertAfter) {
+                    insertAfter.parentNode.insertBefore(statusButton, insertAfter.nextSibling);
+                } else {
+                    noteDiv.appendChild(statusButton);
+                }
+            }
         }
 
         // Add closing note if present
