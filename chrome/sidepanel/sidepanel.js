@@ -232,6 +232,16 @@ function renderNotes(notes) {
             noteDiv.appendChild(expandButton);
         }
 
+        // Add closing note if present
+        if (note.closingNote) {
+            const closingDiv = document.createElement('div');
+            closingDiv.style.fontStyle = 'italic';
+            closingDiv.style.color = '#666';
+            closingDiv.style.marginTop = '5px';
+            closingDiv.textContent = `Closed: ${note.closingNote}`;
+            noteDiv.appendChild(closingDiv);
+        }
+
         noteDiv.appendChild(timestampSpan);
 
         // Style based on status - for 'note' type, always treat as closed
@@ -245,16 +255,106 @@ function renderNotes(notes) {
 }
 
 function toggleNoteStatus(noteId) {
+    const noteDiv = document.querySelector(`[data-note-id="${noteId}"]`);
+    if (!noteDiv) return;
+
+    const existingInput = noteDiv.querySelector('.closing-note-input');
+    if (existingInput) {
+        // Confirm close with the entered text
+        const closingNote = existingInput.value.trim();
+        chrome.storage.local.get(['observatron_notes'], function(result) {
+            const notes = result.observatron_notes || [];
+            const note = notes.find(n => n.id === noteId);
+            if (note) {
+                note.closingNote = closingNote || undefined;
+                note.status = 'closed';
+                chrome.storage.local.set({observatron_notes: notes}, function() {
+                    loadNotes(); // Re-render
+                });
+            }
+        });
+    } else {
+        // Check if we're opening or closing
+        chrome.storage.local.get(['observatron_notes'], function(result) {
+            const notes = result.observatron_notes || [];
+            const note = notes.find(n => n.id === noteId);
+            if (note && note.type !== 'note') {
+                if (note.status === 'open') {
+                    // Closing - show input
+                    showClosingNoteInput(noteId);
+                } else {
+                    // Opening - clear closing note and update status
+                    note.status = 'open';
+                    // Keep closingNote for potential re-closing
+                    chrome.storage.local.set({observatron_notes: notes}, function() {
+                        loadNotes(); // Re-render
+                    });
+                }
+            }
+        });
+    }
+}
+
+function showClosingNoteInput(noteId) {
+    const noteDiv = document.querySelector(`[data-note-id="${noteId}"]`);
+    if (!noteDiv) return;
+
+    // Hide the status button temporarily
+    const statusButton = noteDiv.querySelector('button');
+    if (statusButton) statusButton.style.display = 'none';
+
+    // Create input container
+    const inputContainer = document.createElement('div');
+    inputContainer.style.marginTop = '5px';
+
+    const inputLabel = document.createElement('label');
+    inputLabel.textContent = 'Closing note: ';
+    inputLabel.style.fontSize = '12px';
+    inputLabel.style.color = '#666';
+
+    const input = document.createElement('textarea');
+    input.className = 'closing-note-input';
+    input.placeholder = 'e.g., done, raised as JIRA-123';
+    input.style.width = '200px';
+    input.style.height = '40px';
+    input.style.marginRight = '5px';
+    input.style.resize = 'vertical';
+
+    // Get existing closing note if reopening and re-closing
     chrome.storage.local.get(['observatron_notes'], function(result) {
         const notes = result.observatron_notes || [];
         const note = notes.find(n => n.id === noteId);
-        if (note && note.type !== 'note') { // Don't allow toggling for 'note' type
-            note.status = note.status === 'open' ? 'closed' : 'open';
-            chrome.storage.local.set({observatron_notes: notes}, function() {
-                loadNotes(); // Re-render
-            });
+        if (note && note.closingNote) {
+            input.value = note.closingNote;
         }
+        input.focus();
     });
+
+    const confirmButton = document.createElement('button');
+    confirmButton.textContent = 'Confirm Close';
+    confirmButton.onclick = () => toggleNoteStatus(noteId);
+
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.style.marginLeft = '5px';
+    cancelButton.onclick = () => {
+        // Hide input and show status button again
+        inputContainer.remove();
+        if (statusButton) statusButton.style.display = 'inline-block';
+    };
+
+    inputContainer.appendChild(inputLabel);
+    inputContainer.appendChild(input);
+    inputContainer.appendChild(confirmButton);
+    inputContainer.appendChild(cancelButton);
+
+    // Insert after the timestamp
+    const timestampSpan = noteDiv.querySelector('small');
+    if (timestampSpan) {
+        timestampSpan.parentNode.insertBefore(inputContainer, timestampSpan.nextSibling);
+    } else {
+        noteDiv.appendChild(inputContainer);
+    }
 }
 
 function toggleNoteExpansion(noteId) {
@@ -334,6 +434,11 @@ function saveNotesAs() {
 
             content += `${formattedDate}: ${noteType}${statusText}\n\n`;
             content += `${note.text}\n`;
+
+            // Add closing note if present
+            if (note.closingNote) {
+                content += `\nClosed: ${note.closingNote}\n`;
+            }
 
             // Add screenshot filenames if any
             if (note.screenshots && note.screenshots.length > 0) {
