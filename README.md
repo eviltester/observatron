@@ -221,18 +221,7 @@ Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
     - use the sidebar view, select element, create a note with 'include element screenshot'
 - capture form post events (when configured)
 - save manual notes
-
-
-### TODO:
-
-- show options in sidebar to make easier to maintain
-- configurable data sizes (mutation text, clicked target text)
-- resize log with screensize change, not just screenshot
-- mouse events - move
-- session id configurable in options to create configurable subfolder (below date)
-- add status to special note type (open, closed) (question, bug, etc.)
-    - track status, open closed as event log
-- show notes in side-bar
+show notes in side-bar
     - sequential based on time stamp
     - by type and status (open, closed)
         - question
@@ -241,7 +230,23 @@ Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
         - custom
 - save notes button
     - requires - tracking internally, not just event logging
-        - auto save to file every (X minutes, after every note, config)
+- show options in sidebar to make easier to maintain
+- add status to special note type (open, closed) (question, bug, etc.)
+    - track status, open closed as event log
+
+### TODO:
+
+- session id configurable in options to create configurable subfolder (below date)
+- limit the custom note type name length
+- - @custom[] (would allow opening and closing because it is a custom with a state - state == [])
+- option to - flatten folders into filename e.g. observatron_2025_12_27_sessionid
+- make flatten option the default
+
+- configurable data sizes (mutation text, clicked target text)
+- resize log with screensize change, not just screenshot
+- mouse events - move
+- scan page for broken links when a page is opened (store what url was scanned and only scan once).
+- configurable auto save notes to file every (X minutes, after every note, config)
 
 
 ---
