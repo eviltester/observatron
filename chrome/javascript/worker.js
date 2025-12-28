@@ -88,16 +88,13 @@ contextMenus.createMenus();
 */
 
 // TODO: this could be a message to set options on the backend
+
 function storageHasChanged(changes, namespace) {
   if(namespace === "local"){
     if(changes.hasOwnProperty("observatron")){
+      console.log('Worker.js: Storage changed, sessionName:', changes["observatron"].newValue.sessionName);
       options = changes["observatron"].newValue;
-      // Check if engaged status changed
-      const newEngaged = changes["observatron"].newValue.engaged;
-      const oldEngaged = changes["observatron"].oldValue ? changes["observatron"].oldValue.engaged : false;
-      if(newEngaged !== oldEngaged){
-        toggle_observatron_status();
-      }
+      // Update context menus when options change
       contextMenus.updateContextMenus();
     }
   }
