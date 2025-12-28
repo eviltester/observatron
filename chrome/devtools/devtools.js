@@ -11,7 +11,7 @@ chrome.storage.local.set({inspectedTabId: chrome.devtools.inspectedWindow.tabId}
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'updateElementData') {
     console.log('DevTools: Received updateElementData message');
-    chrome.devtools.inspectedWindow.eval(`
+chrome.devtools.inspectedWindow.eval(`
       function getCSSSelector(el) {
         if (el.id) return '#' + el.id;
 
@@ -28,10 +28,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             break; // ID is unique, no need to go further
           }
 
-          // Add classes
+          // Add classes - use classList for reliable parsing
           let classes = [];
-          if (current.className && typeof current.className === 'string') {
-            classes = current.className.trim().split(/\s+/).filter(c => c && c !== 'hover' && c !== 'active' && c !== 'focus');
+          if (current.classList && current.classList.length > 0) {
+            classes = Array.from(current.classList).filter(c => c && c !== 'hover' && c !== 'active' && c !== 'focus');
             if (classes.length > 0) {
               selector += '.' + classes.join('.');
             }
@@ -92,6 +92,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.error('DevTools: Error in updateElementData:', isException);
       } else if (result) {
         console.log('DevTools: Element data updated:', result);
+        console.log('Generated selector:', result.selector);
         chrome.storage.local.set({selectedElement: result});
       } else {
         console.warn('DevTools: No element selected for update ($0 is null)');
@@ -123,10 +124,10 @@ chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
             break; // ID is unique, no need to go further
           }
 
-          // Add classes
+          // Add classes - use classList for reliable parsing
           let classes = [];
-          if (current.className && typeof current.className === 'string') {
-            classes = current.className.trim().split(/\s+/).filter(c => c && c !== 'hover' && c !== 'active' && c !== 'focus');
+          if (current.classList && current.classList.length > 0) {
+            classes = Array.from(current.classList).filter(c => c && c !== 'hover' && c !== 'active' && c !== 'focus');
             if (classes.length > 0) {
               selector += '.' + classes.join('.');
             }
@@ -174,6 +175,16 @@ chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
         return '';
       }
     }
+    
+    function validateCSSSelector(selector, targetElement) {
+      try {
+        const foundElement = document.querySelector(selector);
+        return foundElement === targetElement;
+      } catch (e) {
+        return false;
+      }
+    }
+    
     function describeElement(el, indent) {
       if (!el) return '';
       let desc = indent + '- ' + el.tagName.toLowerCase();
@@ -194,6 +205,7 @@ chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
         console.error('DevTools: Error in updateElementData:', isException);
       } else if (result) {
         console.log('DevTools: Element data updated:', result);
+        console.log('Generated selector:', result.selector);
         chrome.storage.local.set({selectedElement: result});
       } else {
         console.warn('DevTools: No element selected for update ($0 is null)');
