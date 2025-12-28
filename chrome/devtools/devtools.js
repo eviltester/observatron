@@ -10,7 +10,68 @@ chrome.storage.local.set({inspectedTabId: chrome.devtools.inspectedWindow.tabId}
 // Listen for messages from sidepanel
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'updateElementData') {
+    console.log('DevTools: Received updateElementData message');
     chrome.devtools.inspectedWindow.eval(`
+      function getCSSSelector(el) {
+        if (el.id) return '#' + el.id;
+
+        let path = [];
+        let current = el;
+
+        while (current && current.nodeType === Node.ELEMENT_NODE) {
+          let selector = current.nodeName.toLowerCase();
+
+          // Add ID if available
+          if (current.id) {
+            selector = '#' + current.id;
+            path.unshift(selector);
+            break; // ID is unique, no need to go further
+          }
+
+          // Add classes
+          let classes = [];
+          if (current.className && typeof current.className === 'string') {
+            classes = current.className.trim().split(/\s+/).filter(c => c && c !== 'hover' && c !== 'active' && c !== 'focus');
+            if (classes.length > 0) {
+              selector += '.' + classes.join('.');
+            }
+          }
+
+          // Add other attributes for specificity
+          if (current.name) {
+            selector += '[name="' + current.name + '"]';
+          }
+          if (current.type && current.type !== 'text') {
+            selector += '[type="' + current.type + '"]';
+          }
+
+          // Add nth-child if needed for uniqueness
+          if (!current.id && classes.length === 0 && !current.name && !current.type) {
+            let index = 1;
+            let sibling = current.previousSibling;
+            while (sibling) {
+              if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === current.nodeName) {
+                index++;
+              }
+              sibling = sibling.previousSibling;
+            }
+            if (index > 1) {
+              selector += ':nth-child(' + index + ')';
+            }
+          }
+
+          path.unshift(selector);
+
+          // Stop if we have enough specificity
+          if (current.id || classes.length > 0 || current.name || current.type) {
+            break;
+          }
+
+          current = current.parentNode;
+        }
+
+        return path.join(' > ');
+      }
       function describeElement(el, indent) {
         if (!el) return '';
         let desc = indent + '- ' + el.tagName.toLowerCase();
@@ -25,14 +86,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         return desc;
       }
-      $0 ? {outerHTML: $0.outerHTML, description: describeElement($0, '')} : null;
+    $0 ? {outerHTML: $0.outerHTML, description: describeElement($0, ''), selector: getCSSSelector($0), rect: $0.getBoundingClientRect(), nodeType: $0.nodeType, nodeName: $0.nodeName} : null;
     `, (result, isException) => {
-      if (!isException && result) {
-        // Merge with existing data to preserve selector and rect
-        chrome.storage.local.get(['selectedElement'], (existing) => {
-          const updated = { ...existing.selectedElement, ...result };
-          chrome.storage.local.set({selectedElement: updated});
-        });
+      if (isException) {
+        console.error('DevTools: Error in updateElementData:', isException);
+      } else if (result) {
+        console.log('DevTools: Element data updated:', result);
+        chrome.storage.local.set({selectedElement: result});
+      } else {
+        console.warn('DevTools: No element selected for update ($0 is null)');
       }
     });
   }
@@ -40,30 +102,77 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Store selected element info in storage for sidepanel access
 chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
+  console.log('DevTools: Element selection changed');
 
-  // TODO: improve getXPath generation
-  // when checking parent node, if that has an id then stop at that point
-  // when checking parent node, if it has a data-id which is unique then use that and stop at that point
-  // when checking node or parent node, if it has a data-testid which is unique then use that and stop at that point
   chrome.devtools.inspectedWindow.eval(`
-    function getXPath(el) {
-      if (el.id) return '//*[@id="' + el.id + '"]';
-      let path = [];
-      while (el.nodeType === Node.ELEMENT_NODE) {
-        let index = 1;
-        let previousSibling = el.previousSibling;
-        while (previousSibling) {
-          if (previousSibling.nodeType === Node.ELEMENT_NODE && previousSibling.nodeName === el.nodeName) {
-            index++;
+    function getCSSSelector(el) {
+      try {
+        if (el.id) return '#' + el.id;
+
+        let path = [];
+        let current = el;
+        let depth = 0; // Prevent infinite loops
+
+        while (current && current.nodeType === Node.ELEMENT_NODE && depth < 10) {
+          let selector = current.nodeName.toLowerCase();
+
+          // Add ID if available
+          if (current.id) {
+            selector = '#' + current.id;
+            path.unshift(selector);
+            break; // ID is unique, no need to go further
           }
-          previousSibling = sibling.previousSibling;
+
+          // Add classes
+          let classes = [];
+          if (current.className && typeof current.className === 'string') {
+            classes = current.className.trim().split(/\s+/).filter(c => c && c !== 'hover' && c !== 'active' && c !== 'focus');
+            if (classes.length > 0) {
+              selector += '.' + classes.join('.');
+            }
+          }
+
+          // Add other attributes for specificity
+          if (current.name) {
+            selector += '[name="' + current.name + '"]';
+          }
+          if (current.type && current.type !== 'text') {
+            selector += '[type="' + current.type + '"]';
+          }
+
+          // Add nth-child if needed for uniqueness
+          if (!current.id && classes.length === 0 && !current.name && !current.type) {
+            let index = 1;
+            let sibling = current.previousSibling;
+            while (sibling) {
+              if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === current.nodeName) {
+                index++;
+              }
+              sibling = sibling.previousSibling;
+            }
+            if (index > 1) {
+              selector += ':nth-child(' + index + ')';
+            }
+          }
+
+          path.unshift(selector);
+
+          // Stop if we have enough specificity
+          if (current.id || classes.length > 0 || current.name || current.type) {
+            break;
+          }
+
+          current = current.parentNode;
+          depth++;
         }
-        let tagName = el.nodeName.toLowerCase();
-        let pathSegment = index === 1 ? tagName : tagName + '[' + index + ']';
-        path.unshift(pathSegment);
-        el = el.parentNode;
+
+        let result = path.length > 0 ? path.join(' > ') : el.nodeName.toLowerCase();
+        console.log('Generated CSS selector:', result, 'for element:', el, 'path length:', path.length);
+        return result;
+      } catch (error) {
+        console.warn('Error generating CSS selector:', error);
+        return '';
       }
-      return '/' + path.join('/');
     }
     function describeElement(el, indent) {
       if (!el) return '';
@@ -79,10 +188,15 @@ chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
       }
       return desc;
     }
-    $0 ? {outerHTML: $0.outerHTML, description: describeElement($0, ''), selector: getXPath($0), rect: $0.getBoundingClientRect()} : null;
-  `, (result, isException) => {
-    if (!isException && result) {
-      chrome.storage.local.set({selectedElement: result});
-    }
-  });
+      $0 ? {outerHTML: $0.outerHTML, description: describeElement($0, ''), selector: getCSSSelector($0), rect: $0.getBoundingClientRect(), nodeType: $0.nodeType, nodeName: $0.nodeName} : null;
+    `, (result, isException) => {
+      if (isException) {
+        console.error('DevTools: Error in updateElementData:', isException);
+      } else if (result) {
+        console.log('DevTools: Element data updated:', result);
+        chrome.storage.local.set({selectedElement: result});
+      } else {
+        console.warn('DevTools: No element selected for update ($0 is null)');
+      }
+    });
 });

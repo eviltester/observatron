@@ -6,20 +6,26 @@ document.getElementById('saveNote').addEventListener('click', function() {
     const withElementScreenshot = document.getElementById('withElementScreenshot').checked;
 
     if (noteText.trim()) {
-        // Send message to background script
-        chrome.runtime.sendMessage({
-            method: 'saveNote',
-            noteText: noteText,
-            withScreenshot: withScreenshot,
-            withElementScreenshot: withElementScreenshot
-        }, function(response) {
-            if (chrome.runtime.lastError) {
-                console.warn("Failed to save note:", chrome.runtime.lastError.message);
-            } else {
-                // Clear the textarea after saving
-                document.getElementById('noteText').value = '';
-                // Notes will be re-rendered via storage change listener
-            }
+        // Get the current tab ID for element screenshots
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            const currentTabId = tabs[0] ? tabs[0].id : null;
+
+            // Send message to background script
+            chrome.runtime.sendMessage({
+                method: 'saveNote',
+                noteText: noteText,
+                withScreenshot: withScreenshot,
+                withElementScreenshot: withElementScreenshot,
+                tabId: currentTabId
+            }, function(response) {
+                if (chrome.runtime.lastError) {
+                    console.warn("Failed to save note:", chrome.runtime.lastError.message);
+                } else {
+                    // Clear the textarea after saving
+                    document.getElementById('noteText').value = '';
+                    // Notes will be re-rendered via storage change listener
+                }
+            });
         });
     }
 });
@@ -51,6 +57,23 @@ document.getElementById('savePage').addEventListener('click', function() {
     });
 });
 
+document.getElementById('takeElementScreenshot').addEventListener('click', function() {
+    // Get the current tab ID for element screenshots
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        const currentTabId = tabs[0] ? tabs[0].id : null;
+
+        // Send message to background script
+        chrome.runtime.sendMessage({
+            method: 'takeElementScreenshot',
+            tabId: currentTabId
+        }, function(response) {
+            if (chrome.runtime.lastError) {
+                console.warn("Failed to take element screenshot:", chrome.runtime.lastError.message);
+            }
+        });
+    });
+});
+
 document.getElementById('addSelectedElement').addEventListener('click', function() {
     // Update element data first
     chrome.runtime.sendMessage({type: 'updateElementData'});
@@ -68,10 +91,11 @@ function addElementToNote() {
         if (element) {
             // Format as markdown and description
             const markdown = `\`\`\`html\n${element.outerHTML}\n\`\`\``;
+            const xpath = `CSS Selector: ${element.selector}`;
             const description = element.description;
 
             const currentText = document.getElementById('noteText').value;
-            const newText = currentText ? currentText + '\n\n' + markdown + '\n\n' + description : markdown + '\n\n' + description;
+            const newText = currentText ? currentText + '\n\n' + markdown + '\n\n' + xpath + '\n\n' + description : markdown + '\n\n' + xpath + '\n\n' + description;
             document.getElementById('noteText').value = newText;
         } else {
             alert("No element selected in Elements panel.");
