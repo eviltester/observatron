@@ -221,18 +221,7 @@ Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
     - use the sidebar view, select element, create a note with 'include element screenshot'
 - capture form post events (when configured)
 - save manual notes
-
-
-### TODO:
-
-- show options in sidebar to make easier to maintain
-- configurable data sizes (mutation text, clicked target text)
-- resize log with screensize change, not just screenshot
-- mouse events - move
-- session id configurable in options to create configurable subfolder (below date)
-- add status to special note type (open, closed) (question, bug, etc.)
-    - track status, open closed as event log
-- show notes in side-bar
+show notes in side-bar
     - sequential based on time stamp
     - by type and status (open, closed)
         - question
@@ -241,14 +230,34 @@ Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
         - custom
 - save notes button
     - requires - tracking internally, not just event logging
-        - auto save to file every (X minutes, after every note, config)
+- show options in sidebar to make easier to maintain
+- add status to special note type (open, closed) (question, bug, etc.)
+    - track status, open closed as event log
+- session id configurable in options to create configurable subfolder (below date)
+- option to - flatten folders into filename e.g. observatron/2025_12_27_sessionid
+    - make flatten option the default
+- limit the custom note type name length (15 chars)
+- @custom[] (would allow opening and closing because it is a custom with a state - state == [])
 
+### TODO:
+
+- configurable data sizes (mutation text, clicked target text)
+- resize log with screensize change, not just screenshot
+- mouse events - move
+- scan page for broken links when a page is opened (store what url was scanned and only scan once).
+- configurable auto save notes to file every (X minutes, after every note, config)
 
 ---
 
 # Versions
 
-- 0.97 options and notes
+- 0.99 bug fixes for enablement and element screenshots
+- 0.98 session improvements
+  - session id editable and used for folder name
+  - flatten folder into single sub folder rather than nested e.g. 2025/12/27/session vs 2025-12-27-session (flat is default)
+  - limit custom name length
+  - allow custom types to be closed when created with `@name[]`
+- 0.97 options and notes (released 20251227)
    - add the options to the notes screen for easier access
      - still available as Manage Extension options
    - improve note-taking

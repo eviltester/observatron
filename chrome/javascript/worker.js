@@ -10,7 +10,16 @@ var options = new Options();
 var engagedDomain = null;
 var sideBarSide= "left";
 
-changedOptions();
+// Load saved options on startup
+chrome.storage.local.get(['observatron'], function(result) {
+  if (result.observatron) {
+    // Merge saved options with defaults
+    options = Object.assign(new Options(), result.observatron);
+  } else {
+    options = new Options();
+  }
+  changedOptions();
+});
 
 /*
     Event Routing Configuration
@@ -79,13 +88,13 @@ contextMenus.createMenus();
 */
 
 // TODO: this could be a message to set options on the backend
+
 function storageHasChanged(changes, namespace) {
   if(namespace === "local"){
     if(changes.hasOwnProperty("observatron")){
+      console.log('Worker.js: Storage changed, sessionName:', changes["observatron"].newValue.sessionName);
       options = changes["observatron"].newValue;
-      if(changes["observatron"].newValue.enabled != changes["observatron"].oldValue.enabled){
-        toggle_observatron_status();
-      }
+      // Update context menus when options change
       contextMenus.updateContextMenus();
     }
   }
@@ -121,6 +130,13 @@ function changedOptions(){
 //https://stackoverflow.com/questions/13141072/how-to-get-notified-on-window-resize-in-chrome-browser
 function requestMethodHandler(request, sender, sendResponse){
 
+  // Handle update options request
+  if (request.action === 'updateOptions') {
+    options = Object.assign(new Options(), request.options);
+    sendResponse({success: true});
+    return true;
+  }
+
   // Handle saveNote regardless of engagement status
   if (request.method === 'saveNote') {
     saveNoteFromMessage(request.noteText, request.withScreenshot, request.withElementScreenshot);
@@ -129,11 +145,14 @@ function requestMethodHandler(request, sender, sendResponse){
       chrome.runtime.sendMessage({type: 'updateElementData'});
       setTimeout(() => {
         // Get updated selected element data and take screenshot
-        chrome.storage.local.get(['selectedElement', 'inspectedTabId'], function(result) {
+        chrome.storage.local.get(['selectedElement'], function(result) {
           const element = result.selectedElement;
-          const tabId = result.inspectedTabId;
+          // Use the tab ID from the request (sent by sidepanel)
+          const tabId = request.tabId;
           if (element && tabId) {
             takeElementScreenshot(element.selector, element.rect, tabId);
+          } else if (!tabId) {
+            console.warn("No tab ID available for element screenshot");
           }
         });
       }, 500);
@@ -157,6 +176,26 @@ function requestMethodHandler(request, sender, sendResponse){
 
     if (request.method === 'savePage') {
         saveAsMhtml();
+        return false;
+    }
+
+    if (request.method === 'takeElementScreenshot') {
+        // Refresh element data first
+        chrome.runtime.sendMessage({type: 'updateElementData'});
+        setTimeout(() => {
+            // Get updated selected element data and take screenshot
+            chrome.storage.local.get(['selectedElement'], function(result) {
+                const element = result.selectedElement;
+                const tabId = request.tabId;
+                if (element && tabId) {
+                    takeElementScreenshot(element.selector, element.rect, tabId);
+                } else if (!tabId) {
+                    console.warn("No tab ID available for element screenshot");
+                } else if (!element) {
+                    console.warn("No element selected for screenshot");
+                }
+            });
+        }, 500);
         return false;
     }
 
@@ -419,18 +458,20 @@ function saveNoteFromMessage(noteText, withScreenshot, withElementScreenshot) {
   // @type
 
   var noteToLog = getSpecialNoteTypeFromString(noteText);
-  noteToLog.id = noteId.toString();
-  noteToLog.timestamp = new Date().toISOString();
-  noteToLog.status = noteToLog.type === 'note' ? 'closed' : 'open'; // Default status
+   noteToLog.id = noteId.toString();
+   noteToLog.timestamp = new Date().toISOString();
+   // Set default status: closed for notes and non-closable types, open for closable types
+   var isClosable = ['question', 'todo', 'bug'].includes(noteToLog.type) || noteToLog.type.endsWith('[]');
+   noteToLog.status = isClosable ? 'open' : 'closed';
 
   // Add screenshot filenames if requested
   noteToLog.screenshots = [];
   if (withScreenshot) {
-    var screenshotFilename = getFileName(options.filepath, options.fileprefix, "screenshot_note_" + noteToLog.id, "jpg");
+    var screenshotFilename = getFileName(options.filepath, options.fileprefix, "screenshot_note_" + noteToLog.id, "jpg", options.sessionName, options.folderStructure);
     noteToLog.screenshots.push(screenshotFilename);
   }
   if (withElementScreenshot) {
-    var elementScreenshotFilename = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png");
+    var elementScreenshotFilename = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png", options.sessionName, options.folderStructure);
     noteToLog.screenshots.push(elementScreenshotFilename);
   }
 
@@ -482,7 +523,25 @@ function getSpecialNoteTypeFromString(theString){
       var words = noteText.split(" ");
       var specialConfig = words[0].substring(1);
       if(specialConfig.length>0){
-        specialNote= specialConfig;
+        // Check if it ends with [] for closable custom types
+        var isClosable = specialConfig.endsWith('[]');
+        if(isClosable){
+          specialConfig = specialConfig.slice(0, -2); // Remove []
+        }
+        // Truncate custom type names to 15 characters maximum
+        specialConfig = specialConfig.substring(0, 15);
+
+        // Check if it's actually a standard type name
+        var standardTypes = ['note', 'question', 'todo', 'bug'];
+        if(standardTypes.includes(specialConfig)){
+          specialNote = specialConfig; // Treat as standard type
+        } else {
+          // It's a custom type
+          specialNote = specialConfig;
+          if(isClosable){
+            specialNote += '[]'; // Add [] back for custom closable types
+          }
+        }
       }
       noteText = noteText.substring(words[0].length);
       // TODO filter custom words so that they are suitable as filename portions
@@ -528,7 +587,7 @@ function saveAsMhtml(anId){
 
 function downloadMHTML(mhtmlData){
 
-  var downloadFileName = getFileName(options.filepath, options.fileprefix, "mhtmldata", "mhtml");
+  var downloadFileName = getFileName(options.filepath, options.fileprefix, "mhtmldata", "mhtml", options.sessionName, options.folderStructure);
 
   // Check if mhtmlData is valid
   if (!mhtmlData || !(mhtmlData instanceof Blob)) {
@@ -610,7 +669,7 @@ function downloadAsLog(fileNameAppend, objectToWrite, attribute){
   var jsonString = JSON.stringify(outputObject);
   var dataURL = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonString);
 
-  var downloadFileName = getFileName(options.filepath, options.fileprefix, fileNameAppend, "json");
+  var downloadFileName = getFileName(options.filepath, options.fileprefix, fileNameAppend, "json", options.sessionName, options.folderStructure);
 
   chrome.downloads.download(
         {
@@ -660,36 +719,166 @@ function sanitizeRect(rect) {
   };
 }
 
+function validateRect(rect, imgWidth, imgHeight) {
+  const validated = {
+    left: Math.max(0, Math.min(rect.left, imgWidth)),
+    top: Math.max(0, Math.min(rect.top, imgHeight)),
+    width: Math.max(1, Math.min(rect.width, imgWidth - Math.max(0, rect.left))),
+    height: Math.max(1, Math.min(rect.height, imgHeight - Math.max(0, rect.top)))
+  };
+  
+  // Ensure the rectangle is valid
+  if (validated.width <= 0 || validated.height <= 0) {
+    validated.width = Math.max(1, validated.width);
+    validated.height = Math.max(1, validated.height);
+  }
+  
+  return validated;
+}
+
 function getUpdatedRect(selector, tabId, callback) {
   chrome.scripting.executeScript({
     target: { tabId: tabId },
     function: (selector) => {
-      const el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-      if (el) {
-        el.scrollIntoView({ block: 'center', inline: 'center' });
-        const rect = el.getBoundingClientRect();
-        if (!isFinite(rect.left) || !isFinite(rect.top) || !isFinite(rect.width) || !isFinite(rect.height)) {
+      try {
+        console.log('Attempting to find element with selector:', selector);
+        if (!selector || selector.trim() === '') {
+          console.warn('Empty or invalid selector provided');
           return null;
         }
-        const visibleRect = {
-          left: Math.max(0, rect.left),
-          top: Math.max(0, rect.top),
-          width: Math.min(window.innerWidth - Math.max(0, rect.left), rect.width),
-          height: Math.min(window.innerHeight - Math.max(0, rect.top), rect.height)
-        };
-        const scale = window.devicePixelRatio;
-        return {
-          left: visibleRect.left * scale,
-          top: visibleRect.top * scale,
-          width: visibleRect.width * scale,
-          height: visibleRect.height * scale
-        };
+
+        // Try to find element in main document
+        let el = document.querySelector(selector);
+        if (el) {
+          console.log('Element found in main document:', el);
+        } else {
+          // Try to find in iframes
+          console.log('Element not found in main document, checking iframes...');
+          const iframes = document.querySelectorAll('iframe');
+          for (const iframe of iframes) {
+            try {
+              const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+              if (iframeDoc) {
+                el = iframeDoc.querySelector(selector);
+                if (el) {
+                  console.log('Element found in iframe:', el);
+                  break;
+                }
+              }
+            } catch (e) {
+              console.warn('Could not access iframe content:', e);
+            }
+          }
+        }
+
+        if (!el) {
+          console.warn('Element not found with selector:', selector, 'in main document or iframes');
+          return null;
+        }
+
+        // Check if element is still in the DOM and visible
+        if (!document.contains(el) && !Array.from(document.querySelectorAll('iframe')).some(iframe => {
+          try {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            return doc && doc.contains(el);
+          } catch (e) {
+            return false;
+          }
+        })) {
+          console.warn('Element is no longer in the DOM');
+          return null;
+        }
+        
+        // Get element position relative to document BEFORE scrolling
+        function getElementPositionRelativeToDocument(element) {
+          let rect = element.getBoundingClientRect();
+          let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+          let scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+          
+          return {
+            top: rect.top + scrollTop,
+            left: rect.left + scrollLeft,
+            width: rect.width,
+            height: rect.height
+          };
+        }
+        
+        const elementPosition = getElementPositionRelativeToDocument(el);
+        console.log('Element position relative to document:', elementPosition);
+        
+        // Scroll element into view to ensure it's visible
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        
+        // Wait a bit for scroll to complete
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            // Now get the element's position relative to the viewport
+            const rect = el.getBoundingClientRect();
+            console.log('Element rect after scrolling:', rect);
+            
+            if (!isFinite(rect.left) || !isFinite(rect.top) || !isFinite(rect.width) || !isFinite(rect.height)) {
+              console.warn('Invalid rect for element:', rect);
+              resolve(null);
+              return;
+            }
+            
+            if (rect.width <= 0 || rect.height <= 0) {
+              console.warn('Element has zero size:', rect);
+              resolve(null);
+              return;
+            }
+            
+            // Ensure element is within viewport bounds
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            // Calculate visible portion of element
+            const visibleRect = {
+              left: Math.max(0, rect.left),
+              top: Math.max(0, rect.top),
+              width: Math.min(viewportWidth - Math.max(0, rect.left), rect.width),
+              height: Math.min(viewportHeight - Math.max(0, rect.top), rect.height)
+            };
+            
+            console.log('Visible rect before scaling:', visibleRect);
+            
+            if (visibleRect.width <= 0 || visibleRect.height <= 0) {
+              console.warn('Element not visible in viewport:', visibleRect);
+              resolve(null);
+              return;
+            }
+            
+            // captureVisibleTab captures the viewport, so use viewport-relative coordinates
+            // The screenshot is already scaled by devicePixelRatio, so we need to account for that
+            const scale = window.devicePixelRatio;
+            const scaledRect = {
+              left: Math.round(visibleRect.left * scale),
+              top: Math.round(visibleRect.top * scale),
+              width: Math.round(visibleRect.width * scale),
+              height: Math.round(visibleRect.height * scale)
+            };
+            
+            console.log('Final scaled rect for cropping:', scaledRect);
+            console.log('Device pixel ratio:', scale);
+            console.log('Viewport dimensions:', { width: viewportWidth, height: viewportHeight });
+            
+            resolve(scaledRect);
+          }, 300); // Longer delay to ensure scroll completes and element is positioned
+        });
+      } catch (error) {
+        console.error('Error getting element rect:', error);
+        return null;
       }
-      return null;
     },
     args: [selector]
   }, (results) => {
-    if (chrome.runtime.lastError || !results || !results[0]) {
+    if (chrome.runtime.lastError) {
+      console.warn('Script execution error:', chrome.runtime.lastError);
+      callback(null);
+      return;
+    }
+    if (!results || !results[0]) {
+      console.warn('No script results');
       callback(null);
       return;
     }
@@ -699,10 +888,13 @@ function getUpdatedRect(selector, tabId, callback) {
         typeof result.top !== 'number' || !isFinite(result.top) ||
         typeof result.width !== 'number' || !isFinite(result.width) ||
         typeof result.height !== 'number' || !isFinite(result.height)) {
+      console.warn('Invalid result from script:', result);
       callback(null);
       return;
     }
-    callback(sanitizeRect(result));
+    const sanitized = sanitizeRect(result);
+    console.log('Using sanitized rect for cropping:', sanitized);
+    callback(sanitized);
   });
 }
 
@@ -715,8 +907,8 @@ function cropElementScreenshot(dataURL, rect, tabId, callback) {
           chrome.storage.local.get(['tempDataURL'], (result) => {
             const dataURL = result.tempDataURL;
             chrome.storage.local.remove('tempDataURL');
-            const w = Math.floor(width);
-            const h = Math.floor(height);
+            const w = Math.max(1, Math.floor(width));
+            const h = Math.max(1, Math.floor(height));
             if (w <= 0 || h <= 0) {
               resolve(dataURL);
               return;
@@ -727,7 +919,26 @@ function cropElementScreenshot(dataURL, rect, tabId, callback) {
               const ctx = canvas.getContext('2d');
               canvas.width = w;
               canvas.height = h;
-              ctx.drawImage(img, left, top, width, height, 0, 0, w, h);
+              
+              // Validate and adjust crop coordinates
+              const imgWidth = img.width;
+              const imgHeight = img.height;
+              const validatedRect = {
+                left: Math.max(0, Math.min(left, imgWidth)),
+                top: Math.max(0, Math.min(top, imgHeight)),
+                width: Math.max(1, Math.min(width, imgWidth - Math.max(0, left))),
+                height: Math.max(1, Math.min(height, imgHeight - Math.max(0, top)))
+              };
+              
+              // Ensure the crop area is valid
+              if (validatedRect.width <= 0 || validatedRect.height <= 0) {
+                resolve(dataURL); // Return original if crop area is invalid
+                return;
+              }
+              
+              console.log('Cropping with validated rect:', validatedRect, 'from image size:', { width: imgWidth, height: imgHeight });
+              
+              ctx.drawImage(img, validatedRect.left, validatedRect.top, validatedRect.width, validatedRect.height, 0, 0, w, h);
               resolve(canvas.toDataURL('image/png'));
             };
             img.onerror = () => {
@@ -745,28 +956,46 @@ function cropElementScreenshot(dataURL, rect, tabId, callback) {
 }
 
 function takeElementScreenshot(selector, rect, tabId) {
+  console.log('Taking element screenshot for selector:', selector, 'on tab:', tabId);
   chrome.tabs.get(tabId, (tab) => {
     if (chrome.runtime.lastError || !tab) {
-      console.warn("Failed to get tab");
+      console.warn("Failed to get tab:", chrome.runtime.lastError);
       return;
     }
     const windowId = tab.windowId;
+    console.log('Tab info:', { tabId, windowId, url: tab.url });
+    
+    // First, try to get the updated rect
     getUpdatedRect(selector, tabId, (updatedRect) => {
       if (!updatedRect) {
+        console.warn('No updated rect received for selector:', selector);
         return;
       }
+      console.log('Updated rect for cropping:', updatedRect);
+      
+      // Wait a bit more to ensure scrolling is complete
       setTimeout(() => {
+        console.log('Capturing visible tab...');
         chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataURL) => {
           if (chrome.runtime.lastError) {
+            console.warn('Screenshot capture failed:', chrome.runtime.lastError);
             return;
           }
+          if (!dataURL) {
+            console.warn('No screenshot data URL received');
+            return;
+          }
+          console.log('Screenshot captured, cropping...');
           cropElementScreenshot(dataURL, updatedRect, tabId, (croppedDataURL) => {
             if (croppedDataURL) {
+              console.log('Element screenshot cropped successfully');
               downloadElementScreenshot(croppedDataURL);
+            } else {
+              console.warn('Element screenshot cropping failed');
             }
           });
         });
-      }, 500);
+      }, 400); // Increased delay to ensure scrolling is complete
     });
   });
 }
@@ -774,7 +1003,7 @@ function takeElementScreenshot(selector, rect, tabId) {
 
 
 function downloadElementScreenshot(dataURL) {
-  const downloadFileName = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png");
+  const downloadFileName = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png", options.sessionName, options.folderStructure);
   chrome.downloads.download({
     url: dataURL,
     filename: downloadFileName
@@ -827,7 +1056,7 @@ function downloadScreenshot(additionalPrefix){
             relatedPrefix = additionalPrefix;
         }
 
-        var downloadFileName = getFileName(options.filepath, options.fileprefix, "screenshot"+dimensions+relatedPrefix, "jpg");
+        var downloadFileName = getFileName(options.filepath, options.fileprefix, "screenshot"+dimensions+relatedPrefix, "jpg", options.sessionName, options.folderStructure);
 
 
         chrome.downloads.download(

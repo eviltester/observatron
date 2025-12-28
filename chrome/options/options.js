@@ -94,6 +94,16 @@ function buildOptionsUI(containerId) {
     container.appendChild(fileprefixLabel);
     container.appendChild(document.createElement('br'));
 
+    const folderStructureLabel = document.createElement('label');
+    const folderStructureSelect = document.createElement('select');
+    folderStructureSelect.id = 'folderStructure';
+    folderStructureSelect.appendChild(new Option('Nested folders (2025/12/28/session)', 'nested'));
+    folderStructureSelect.appendChild(new Option('Flat folder (2025-12-28-session)', 'flat'));
+    folderStructureLabel.appendChild(folderStructureSelect);
+    folderStructureLabel.appendChild(document.createTextNode(' Folder Structure:'));
+    container.appendChild(folderStructureLabel);
+    container.appendChild(document.createElement('br'));
+
     // Timing Configuration
     const h2Timing = document.createElement('h2');
     h2Timing.textContent = 'Timing Configuration';
@@ -153,18 +163,22 @@ function save_options() {
 
     var newOptions = new Options(); // defaults are set so only set if valid
 
+    // Preserve the current engaged state
+    newOptions.engaged = options.engaged;
+
     newOptions.setOnResizeEvent(document.getElementById('onresize').checked);
     newOptions.setOnScrollEvent(document.getElementById('onscroll').checked);
     newOptions.setOnPageLoad(document.getElementById('onpageload').checked);
     newOptions.setOnPageUpdated(document.getElementById('onpageupdated').checked);
     newOptions.setOnDoubleClickShot(document.getElementById('ondoubleclick').checked);
     newOptions.setOnPostSubmit(document.getElementById('onpostformsubmit').checked);
-    
+
     newOptions.setScrollingTimeoutMilliseconds(document.getElementById('scrolling_timeout').value);
     newOptions.setResizeTimeoutMilliseconds(document.getElementById('resize_timeout').value);
-    
+
     newOptions.setFilePath(document.getElementById('filepath').value);
-    newOptions.setFilePrefix(document.getElementById('fileprefix').value);    
+    newOptions.setFilePrefix(document.getElementById('fileprefix').value);
+    newOptions.setFolderStructure(document.getElementById('folderStructure').value);
 
     options = newOptions;
 
@@ -206,10 +220,11 @@ function displayObservatronOptionsOnGUI(options){
   document.getElementById('onpageupdated').checked = options.onPageUpdated;
   document.getElementById('ondoubleclick').checked = options.onDoubleClickShot;
   document.getElementById('onpostformsubmit').checked = options.onPostSubmit;
-  document.getElementById('filepath').value = options.filepath;
-  document.getElementById('fileprefix').value = options.fileprefix;
-  document.getElementById('scrolling_timeout').value = options.scrolling_timeout_milliseconds;
-  document.getElementById('resize_timeout').value = options.resize_timeout_milliseconds;
+   document.getElementById('filepath').value = options.filepath;
+   document.getElementById('fileprefix').value = options.fileprefix;
+   document.getElementById('folderStructure').value = options.folderStructure;
+   document.getElementById('scrolling_timeout').value = options.scrolling_timeout_milliseconds;
+   document.getElementById('resize_timeout').value = options.resize_timeout_milliseconds;
   
   setHeadingOnPage();
 

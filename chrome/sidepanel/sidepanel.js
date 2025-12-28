@@ -6,20 +6,26 @@ document.getElementById('saveNote').addEventListener('click', function() {
     const withElementScreenshot = document.getElementById('withElementScreenshot').checked;
 
     if (noteText.trim()) {
-        // Send message to background script
-        chrome.runtime.sendMessage({
-            method: 'saveNote',
-            noteText: noteText,
-            withScreenshot: withScreenshot,
-            withElementScreenshot: withElementScreenshot
-        }, function(response) {
-            if (chrome.runtime.lastError) {
-                console.warn("Failed to save note:", chrome.runtime.lastError.message);
-            } else {
-                // Clear the textarea after saving
-                document.getElementById('noteText').value = '';
-                // Notes will be re-rendered via storage change listener
-            }
+        // Get the current tab ID for element screenshots
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            const currentTabId = tabs[0] ? tabs[0].id : null;
+
+            // Send message to background script
+            chrome.runtime.sendMessage({
+                method: 'saveNote',
+                noteText: noteText,
+                withScreenshot: withScreenshot,
+                withElementScreenshot: withElementScreenshot,
+                tabId: currentTabId
+            }, function(response) {
+                if (chrome.runtime.lastError) {
+                    console.warn("Failed to save note:", chrome.runtime.lastError.message);
+                } else {
+                    // Clear the textarea after saving
+                    document.getElementById('noteText').value = '';
+                    // Notes will be re-rendered via storage change listener
+                }
+            });
         });
     }
 });
@@ -51,6 +57,23 @@ document.getElementById('savePage').addEventListener('click', function() {
     });
 });
 
+document.getElementById('takeElementScreenshot').addEventListener('click', function() {
+    // Get the current tab ID for element screenshots
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        const currentTabId = tabs[0] ? tabs[0].id : null;
+
+        // Send message to background script
+        chrome.runtime.sendMessage({
+            method: 'takeElementScreenshot',
+            tabId: currentTabId
+        }, function(response) {
+            if (chrome.runtime.lastError) {
+                console.warn("Failed to take element screenshot:", chrome.runtime.lastError.message);
+            }
+        });
+    });
+});
+
 document.getElementById('addSelectedElement').addEventListener('click', function() {
     // Update element data first
     chrome.runtime.sendMessage({type: 'updateElementData'});
@@ -68,16 +91,101 @@ function addElementToNote() {
         if (element) {
             // Format as markdown and description
             const markdown = `\`\`\`html\n${element.outerHTML}\n\`\`\``;
+            const xpath = `CSS Selector: ${element.selector}`;
             const description = element.description;
 
             const currentText = document.getElementById('noteText').value;
-            const newText = currentText ? currentText + '\n\n' + markdown + '\n\n' + description : markdown + '\n\n' + description;
+            const newText = currentText ? currentText + '\n\n' + markdown + '\n\n' + xpath + '\n\n' + description : markdown + '\n\n' + xpath + '\n\n' + description;
             document.getElementById('noteText').value = newText;
         } else {
             alert("No element selected in Elements panel.");
         }
     });
 }
+
+// Session name functionality
+function loadSessionName() {
+    chrome.storage.local.get(['observatron'], function(result) {
+        const options = result.observatron || getDefaultOptions();
+        updateSessionDisplay(options);
+    });
+}
+
+
+
+function updateSessionDisplay(options) {
+    const sessionName = options && options.sessionName ? options.sessionName : '';
+    const sanitizedSession = sanitizeSessionName(sessionName);
+    const folderStructure = options && options.folderStructure ? options.folderStructure : 'nested';
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+
+    let sessionPath;
+    if (folderStructure === 'flat') {
+        sessionPath = `${year}-${month}-${day}`;
+        if (sanitizedSession) {
+            sessionPath += `-${sanitizedSession}`;
+        }
+        sessionPath += '/';
+    } else {
+        sessionPath = `observatron/${year}/${month}/${day}/`;
+        if (sanitizedSession) {
+            sessionPath += `${sanitizedSession}/`;
+        }
+    }
+
+    document.getElementById('sessionPath').textContent = sessionPath;
+    document.getElementById('sidepanelSessionName').value = sessionName;
+}
+
+function showSessionNameError(message) {
+    const errorDiv = document.getElementById('sessionNameError');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    setTimeout(() => {
+        errorDiv.style.display = 'none';
+    }, 2000);
+}
+
+
+
+document.getElementById('editSessionName').addEventListener('click', function() {
+    document.getElementById('sessionDisplay').style.display = 'none';
+    document.getElementById('sessionEdit').style.display = 'block';
+    document.getElementById('sidepanelSessionName').focus();
+});
+
+document.getElementById('saveSessionName').addEventListener('click', function() {
+    const sessionName = document.getElementById('sidepanelSessionName').value.trim();
+    if (sessionName.length <= 20) {
+        chrome.storage.local.get(['observatron'], function(result) {
+            const options = result.observatron || getDefaultOptions();
+            options.sessionName = sessionName;
+            chrome.storage.local.set({observatron: options}, function() {
+                if (chrome.runtime.lastError) {
+                    console.error('Storage set error:', chrome.runtime.lastError);
+                    return;
+                }
+                // Send updated options directly to worker
+                chrome.runtime.sendMessage({action: 'updateOptions', options: options});
+                loadSessionName(); // Reload from storage
+                document.getElementById('sessionDisplay').style.display = 'block';
+                document.getElementById('sessionEdit').style.display = 'none';
+            });
+        });
+    } else {
+        showSessionNameError('Session name must be 20 characters or less');
+    }
+});
+
+document.getElementById('cancelSessionEdit').addEventListener('click', function() {
+    // Reload the current session name to reset any changes
+    loadSessionName();
+    document.getElementById('sessionDisplay').style.display = 'block';
+    document.getElementById('sessionEdit').style.display = 'none';
+});
 
 // Focus on textarea when page loads
 document.getElementById('noteText').focus();
@@ -102,21 +210,22 @@ function populateTypeFilter() {
         typeFilter.remove(5);
     }
 
-    // Get unique custom types (types that start with @ or are not standard types)
+    // Get unique display types (remove [] suffix for display)
     const standardTypes = ['note', 'question', 'todo', 'bug'];
-    const customTypes = new Set();
+    const displayTypes = new Set();
 
     allNotes.forEach(note => {
-        if (!standardTypes.includes(note.type)) {
-            customTypes.add(note.type);
+        const displayType = note.type.endsWith('[]') ? note.type.slice(0, -2) : note.type;
+        if (!standardTypes.includes(displayType)) {
+            displayTypes.add(displayType);
         }
     });
 
-    // Add custom types to dropdown
-    Array.from(customTypes).sort().forEach(type => {
+    // Add custom display types to dropdown
+    Array.from(displayTypes).sort().forEach(displayType => {
         const option = document.createElement('option');
-        option.value = type;
-        option.textContent = type.charAt(0).toUpperCase() + type.slice(1) + 's'; // Pluralize
+        option.value = displayType; // Use display type for filtering
+        option.textContent = displayType.charAt(0).toUpperCase() + displayType.slice(1) + 's'; // Pluralize
         typeFilter.appendChild(option);
     });
 
@@ -134,9 +243,12 @@ function filterAndRenderNotes() {
 
     let filteredNotes = allNotes;
 
-    // Filter by type
+    // Filter by type (handle [] suffix)
     if (typeFilter !== 'all') {
-        filteredNotes = filteredNotes.filter(note => note.type === typeFilter);
+        filteredNotes = filteredNotes.filter(note => {
+            const displayType = note.type.endsWith('[]') ? note.type.slice(0, -2) : note.type;
+            return displayType === typeFilter;
+        });
     }
 
     // Filter by status
@@ -193,8 +305,10 @@ function renderNotes(notes) {
         noteDiv.style.padding = '5px';
         noteDiv.setAttribute('data-note-id', note.id);
 
+        // Display type without [] suffix
+        const displayType = note.type.endsWith('[]') ? note.type.slice(0, -2) : note.type;
         const typeSpan = document.createElement('span');
-        typeSpan.textContent = `[${note.type}] `;
+        typeSpan.textContent = `[${displayType}] `;
         typeSpan.style.fontWeight = 'bold';
 
         const textSpan = document.createElement('span');
@@ -209,7 +323,7 @@ function renderNotes(notes) {
         timestampSpan.style.color = '#666';
 
         // Only show status button for certain note types
-        const showStatusButton = ['question', 'todo', 'bug'].includes(note.type) || note.type.startsWith('@');
+        const showStatusButton = ['question', 'todo', 'bug'].includes(note.type) || note.type.endsWith('[]');
 
         noteDiv.appendChild(typeSpan);
         noteDiv.appendChild(textSpan);
@@ -396,18 +510,26 @@ function toggleNoteExpansion(noteId) {
     }
 }
 
-// Listen for storage changes to update notes display
+// Listen for storage changes to update notes and session display
 chrome.storage.onChanged.addListener(function(changes, namespace) {
-    if (namespace === 'local' && changes.observatron_notes) {
-        allNotes = changes.observatron_notes.newValue || [];
-        populateTypeFilter();
-        filterAndRenderNotes();
+    if (namespace === 'local') {
+        if (changes.observatron_notes) {
+            allNotes = changes.observatron_notes.newValue || [];
+            populateTypeFilter();
+            filterAndRenderNotes();
+        }
+        if (changes.observatron) {
+            // Update session display when options change (session name or folder structure)
+            const options = changes.observatron.newValue || getDefaultOptions();
+            updateSessionDisplay(options);
+        }
     }
 });
 
 // Load notes on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadNotes();
+    loadSessionName();
     document.getElementById('saveNotes').addEventListener('click', saveNotesAs);
     document.getElementById('loadNotes').addEventListener('click', () => {
         document.getElementById('notesFileInput').click();
@@ -446,9 +568,7 @@ function loadNotesFromFile(event) {
                 if (!note.id || !note.text || !note.type || !note.timestamp) {
                     throw new Error('Invalid note structure: missing required fields');
                 }
-                if (!['note', 'question', 'todo', 'bug'].includes(note.type) && !note.type.startsWith('@')) {
-                    // Allow custom types starting with @
-                }
+                // Allow all types - validation happens at creation time
             }
 
             // If validation passes, confirm replacement
@@ -523,10 +643,11 @@ function saveNotesAs() {
             sortedNotes.forEach(note => {
                 const date = new Date(note.timestamp);
                 const formattedDate = date.toLocaleString(); // Readable date/time
-                const noteType = note.type.toUpperCase();
+                const displayType = note.type.endsWith('[]') ? note.type.slice(0, -2) : note.type;
+                const noteType = displayType.toUpperCase();
 
-                // Add status for special notes (question, todo, bug, custom)
-                const isSpecialNote = ['question', 'todo', 'bug'].includes(note.type) || note.type.startsWith('@');
+                // Add status for special notes (question, todo, bug, custom closable)
+                const isSpecialNote = ['question', 'todo', 'bug'].includes(note.type) || note.type.endsWith('[]');
                 const statusText = isSpecialNote ? ` : ${note.status.toUpperCase()}` : '';
 
                 content += `${formattedDate}: ${noteType}${statusText}\n\n`;
