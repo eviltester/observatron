@@ -18,6 +18,20 @@
         </details>
     </div>
 
+    <div style="margin-bottom:10px">
+        <div id="sessionDisplay">
+            <strong>Session:</strong> <span id="sessionPath">observatron/YYYY/MM/DD/</span>
+            <button id="editSessionName">Edit</button>
+        </div>
+        <div id="sessionEdit" style="display: none;">
+            <label for="sidepanelSessionName">Session Name:</label>
+            <input type="text" id="sidepanelSessionName" maxlength="20" placeholder="e.g. check files" style="width: 150px;">
+            <div id="sessionNameError" style="color: red; font-size: 12px; display: none;"></div>
+            <button id="saveSessionName">Save</button>
+            <button id="cancelSessionEdit">Cancel</button>
+        </div>
+    </div>
+
     <div>
         <button id="takeScreenshot">Take Screenshot</button>
         <button id="savePage">Save Page</button>

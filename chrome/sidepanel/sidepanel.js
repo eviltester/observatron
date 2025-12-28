@@ -79,6 +79,90 @@ function addElementToNote() {
     });
 }
 
+// Session name functionality
+function loadSessionName() {
+    chrome.storage.local.get(['observatron'], function(result) {
+        const options = result.observatron || getDefaultOptions();
+        updateSessionDisplay(options);
+    });
+}
+
+
+
+function updateSessionDisplay(options) {
+    const sessionName = options && options.sessionName ? options.sessionName : '';
+    const sanitizedSession = sanitizeSessionName(sessionName);
+    const folderStructure = options && options.folderStructure ? options.folderStructure : 'nested';
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+
+    let sessionPath;
+    if (folderStructure === 'flat') {
+        sessionPath = `${year}-${month}-${day}`;
+        if (sanitizedSession) {
+            sessionPath += `-${sanitizedSession}`;
+        }
+        sessionPath += '/';
+    } else {
+        sessionPath = `observatron/${year}/${month}/${day}/`;
+        if (sanitizedSession) {
+            sessionPath += `${sanitizedSession}/`;
+        }
+    }
+
+    document.getElementById('sessionPath').textContent = sessionPath;
+    document.getElementById('sidepanelSessionName').value = sessionName;
+}
+
+function showSessionNameError(message) {
+    const errorDiv = document.getElementById('sessionNameError');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    setTimeout(() => {
+        errorDiv.style.display = 'none';
+    }, 2000);
+}
+
+
+
+document.getElementById('editSessionName').addEventListener('click', function() {
+    document.getElementById('sessionDisplay').style.display = 'none';
+    document.getElementById('sessionEdit').style.display = 'block';
+    document.getElementById('sidepanelSessionName').focus();
+});
+
+document.getElementById('saveSessionName').addEventListener('click', function() {
+    const sessionName = document.getElementById('sidepanelSessionName').value.trim();
+    if (sessionName.length <= 20) {
+        chrome.storage.local.get(['observatron'], function(result) {
+            const options = result.observatron || getDefaultOptions();
+            options.sessionName = sessionName;
+            chrome.storage.local.set({observatron: options}, function() {
+                if (chrome.runtime.lastError) {
+                    console.error('Storage set error:', chrome.runtime.lastError);
+                    return;
+                }
+                // Send updated options directly to worker
+                chrome.runtime.sendMessage({action: 'updateOptions', options: options});
+                loadSessionName(); // Reload from storage
+                document.getElementById('sessionDisplay').style.display = 'block';
+                document.getElementById('sessionEdit').style.display = 'none';
+            });
+        });
+    } else {
+        showSessionNameError('Session name must be 20 characters or less');
+    }
+});
+
+document.getElementById('cancelSessionEdit').addEventListener('click', function() {
+    // Reload the current session name to reset any changes
+    loadSessionName();
+    document.getElementById('sessionDisplay').style.display = 'block';
+    document.getElementById('sessionEdit').style.display = 'none';
+});
+
 // Focus on textarea when page loads
 document.getElementById('noteText').focus();
 
@@ -396,18 +480,26 @@ function toggleNoteExpansion(noteId) {
     }
 }
 
-// Listen for storage changes to update notes display
+// Listen for storage changes to update notes and session display
 chrome.storage.onChanged.addListener(function(changes, namespace) {
-    if (namespace === 'local' && changes.observatron_notes) {
-        allNotes = changes.observatron_notes.newValue || [];
-        populateTypeFilter();
-        filterAndRenderNotes();
+    if (namespace === 'local') {
+        if (changes.observatron_notes) {
+            allNotes = changes.observatron_notes.newValue || [];
+            populateTypeFilter();
+            filterAndRenderNotes();
+        }
+        if (changes.observatron) {
+            // Update session display when options change (session name or folder structure)
+            const options = changes.observatron.newValue || getDefaultOptions();
+            updateSessionDisplay(options);
+        }
     }
 });
 
 // Load notes on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadNotes();
+    loadSessionName();
     document.getElementById('saveNotes').addEventListener('click', saveNotesAs);
     document.getElementById('loadNotes').addEventListener('click', () => {
         document.getElementById('notesFileInput').click();

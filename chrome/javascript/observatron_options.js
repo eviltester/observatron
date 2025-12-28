@@ -1,22 +1,6 @@
 function Options(){
-
-    this.engaged = false;
-
-    // which events are we responding to
-    this.onScrollEvent= true;
-    this.onResizeEvent= true;
-    this.onPageLoad= true;
-    this.onPageUpdated= false;
-    this.onDoubleClickShot= true;
-    this.onPostSubmit= false;
-
-    // where are the files stored?
-    this.filepath= "observatron/";
-    this.fileprefix= "obs_";
-
-    // 
-    this.scrolling_timeout_milliseconds= 500;
-    this.resize_timeout_milliseconds= 500;
+    // Set all default values from getDefaultOptions
+    Object.assign(this, getDefaultOptions());
 
     this.isSet = function(value){
         return value !== undefined && value !== NaN && value!=null;
@@ -74,4 +58,39 @@ Options.prototype.setFilePath = function(value){
 }
 Options.prototype.setFilePrefix = function(value){
     this.setFilePropertyIfValid("fileprefix", value);
+}
+Options.prototype.setSessionName = function(value){
+    if(this.isSet(value) && value.length <= 20){
+        this.sessionName = value;
+    }
+}
+
+Options.prototype.setFolderStructure = function(value){
+    if(value === "nested" || value === "flat"){
+        this.folderStructure = value;
+    }
+}
+
+function getDefaultOptions() {
+    return {
+        engaged: false,
+        onScrollEvent: true,
+        onResizeEvent: true,
+        onPageLoad: true,
+        onPageUpdated: false,
+        onDoubleClickShot: true,
+        onPostSubmit: false,
+        filepath: "observatron/",
+        fileprefix: "obs_",
+        sessionName: "",
+        folderStructure: "flat",
+        scrolling_timeout_milliseconds: 500,
+        resize_timeout_milliseconds: 500
+    };
+}
+
+function sanitizeSessionName(sessionName) {
+    if (!sessionName) return "";
+    // Only allow a-z and 0-9, replace everything else with dashes
+    return sessionName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }

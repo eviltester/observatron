@@ -233,14 +233,16 @@ show notes in side-bar
 - show options in sidebar to make easier to maintain
 - add status to special note type (open, closed) (question, bug, etc.)
     - track status, open closed as event log
-
+- session id configurable in options to create configurable subfolder (below date)
+- option to - flatten folders into filename e.g. observatron_2025_12_27_sessionid
+    - make flatten option the default
+    - 
 ### TODO:
 
-- session id configurable in options to create configurable subfolder (below date)
+
 - limit the custom note type name length
 - - @custom[] (would allow opening and closing because it is a custom with a state - state == [])
-- option to - flatten folders into filename e.g. observatron_2025_12_27_sessionid
-- make flatten option the default
+
 
 - configurable data sizes (mutation text, clicked target text)
 - resize log with screensize change, not just screenshot
@@ -253,7 +255,11 @@ show notes in side-bar
 
 # Versions
 
-- 0.97 options and notes
+
+- 0.98 session improvements
+  - session id editable and used for folder name
+  - flatten folder into single sub folder rather than nested e.g. 2025/12/27/session vs 2025-12-27-session (flat is default)
+- 0.97 options and notes (released 20251227)
    - add the options to the notes screen for easier access
      - still available as Manage Extension options
    - improve note-taking

@@ -10,7 +10,16 @@ var options = new Options();
 var engagedDomain = null;
 var sideBarSide= "left";
 
-changedOptions();
+// Load saved options on startup
+chrome.storage.local.get(['observatron'], function(result) {
+  if (result.observatron) {
+    // Merge saved options with defaults
+    options = Object.assign(new Options(), result.observatron);
+  } else {
+    options = new Options();
+  }
+  changedOptions();
+});
 
 /*
     Event Routing Configuration
@@ -83,7 +92,10 @@ function storageHasChanged(changes, namespace) {
   if(namespace === "local"){
     if(changes.hasOwnProperty("observatron")){
       options = changes["observatron"].newValue;
-      if(changes["observatron"].newValue.enabled != changes["observatron"].oldValue.enabled){
+      // Check if engaged status changed
+      const newEngaged = changes["observatron"].newValue.engaged;
+      const oldEngaged = changes["observatron"].oldValue ? changes["observatron"].oldValue.engaged : false;
+      if(newEngaged !== oldEngaged){
         toggle_observatron_status();
       }
       contextMenus.updateContextMenus();
@@ -120,6 +132,13 @@ function changedOptions(){
 // useful info
 //https://stackoverflow.com/questions/13141072/how-to-get-notified-on-window-resize-in-chrome-browser
 function requestMethodHandler(request, sender, sendResponse){
+
+  // Handle update options request
+  if (request.action === 'updateOptions') {
+    options = Object.assign(new Options(), request.options);
+    sendResponse({success: true});
+    return true;
+  }
 
   // Handle saveNote regardless of engagement status
   if (request.method === 'saveNote') {
@@ -426,11 +445,11 @@ function saveNoteFromMessage(noteText, withScreenshot, withElementScreenshot) {
   // Add screenshot filenames if requested
   noteToLog.screenshots = [];
   if (withScreenshot) {
-    var screenshotFilename = getFileName(options.filepath, options.fileprefix, "screenshot_note_" + noteToLog.id, "jpg");
+    var screenshotFilename = getFileName(options.filepath, options.fileprefix, "screenshot_note_" + noteToLog.id, "jpg", options.sessionName, options.folderStructure);
     noteToLog.screenshots.push(screenshotFilename);
   }
   if (withElementScreenshot) {
-    var elementScreenshotFilename = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png");
+    var elementScreenshotFilename = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png", options.sessionName, options.folderStructure);
     noteToLog.screenshots.push(elementScreenshotFilename);
   }
 
@@ -528,7 +547,7 @@ function saveAsMhtml(anId){
 
 function downloadMHTML(mhtmlData){
 
-  var downloadFileName = getFileName(options.filepath, options.fileprefix, "mhtmldata", "mhtml");
+  var downloadFileName = getFileName(options.filepath, options.fileprefix, "mhtmldata", "mhtml", options.sessionName, options.folderStructure);
 
   // Check if mhtmlData is valid
   if (!mhtmlData || !(mhtmlData instanceof Blob)) {
@@ -610,7 +629,7 @@ function downloadAsLog(fileNameAppend, objectToWrite, attribute){
   var jsonString = JSON.stringify(outputObject);
   var dataURL = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonString);
 
-  var downloadFileName = getFileName(options.filepath, options.fileprefix, fileNameAppend, "json");
+  var downloadFileName = getFileName(options.filepath, options.fileprefix, fileNameAppend, "json", options.sessionName, options.folderStructure);
 
   chrome.downloads.download(
         {
@@ -774,7 +793,7 @@ function takeElementScreenshot(selector, rect, tabId) {
 
 
 function downloadElementScreenshot(dataURL) {
-  const downloadFileName = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png");
+  const downloadFileName = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png", options.sessionName, options.folderStructure);
   chrome.downloads.download({
     url: dataURL,
     filename: downloadFileName
@@ -827,7 +846,7 @@ function downloadScreenshot(additionalPrefix){
             relatedPrefix = additionalPrefix;
         }
 
-        var downloadFileName = getFileName(options.filepath, options.fileprefix, "screenshot"+dimensions+relatedPrefix, "jpg");
+        var downloadFileName = getFileName(options.filepath, options.fileprefix, "screenshot"+dimensions+relatedPrefix, "jpg", options.sessionName, options.folderStructure);
 
 
         chrome.downloads.download(
