@@ -251,7 +251,7 @@ show notes in side-bar
 
 # Versions
 
-
+- 0.99 bug fixes for enablement and element screenshots
 - 0.98 session improvements
   - session id editable and used for folder name
   - flatten folder into single sub folder rather than nested e.g. 2025/12/27/session vs 2025-12-27-session (flat is default)
