@@ -186,21 +186,22 @@ function populateTypeFilter() {
         typeFilter.remove(5);
     }
 
-    // Get unique custom types (types that start with @ or are not standard types)
+    // Get unique display types (remove [] suffix for display)
     const standardTypes = ['note', 'question', 'todo', 'bug'];
-    const customTypes = new Set();
+    const displayTypes = new Set();
 
     allNotes.forEach(note => {
-        if (!standardTypes.includes(note.type)) {
-            customTypes.add(note.type);
+        const displayType = note.type.endsWith('[]') ? note.type.slice(0, -2) : note.type;
+        if (!standardTypes.includes(displayType)) {
+            displayTypes.add(displayType);
         }
     });
 
-    // Add custom types to dropdown
-    Array.from(customTypes).sort().forEach(type => {
+    // Add custom display types to dropdown
+    Array.from(displayTypes).sort().forEach(displayType => {
         const option = document.createElement('option');
-        option.value = type;
-        option.textContent = type.charAt(0).toUpperCase() + type.slice(1) + 's'; // Pluralize
+        option.value = displayType; // Use display type for filtering
+        option.textContent = displayType.charAt(0).toUpperCase() + displayType.slice(1) + 's'; // Pluralize
         typeFilter.appendChild(option);
     });
 
@@ -218,9 +219,12 @@ function filterAndRenderNotes() {
 
     let filteredNotes = allNotes;
 
-    // Filter by type
+    // Filter by type (handle [] suffix)
     if (typeFilter !== 'all') {
-        filteredNotes = filteredNotes.filter(note => note.type === typeFilter);
+        filteredNotes = filteredNotes.filter(note => {
+            const displayType = note.type.endsWith('[]') ? note.type.slice(0, -2) : note.type;
+            return displayType === typeFilter;
+        });
     }
 
     // Filter by status
@@ -277,8 +281,10 @@ function renderNotes(notes) {
         noteDiv.style.padding = '5px';
         noteDiv.setAttribute('data-note-id', note.id);
 
+        // Display type without [] suffix
+        const displayType = note.type.endsWith('[]') ? note.type.slice(0, -2) : note.type;
         const typeSpan = document.createElement('span');
-        typeSpan.textContent = `[${note.type}] `;
+        typeSpan.textContent = `[${displayType}] `;
         typeSpan.style.fontWeight = 'bold';
 
         const textSpan = document.createElement('span');
@@ -293,7 +299,7 @@ function renderNotes(notes) {
         timestampSpan.style.color = '#666';
 
         // Only show status button for certain note types
-        const showStatusButton = ['question', 'todo', 'bug'].includes(note.type) || note.type.startsWith('@');
+        const showStatusButton = ['question', 'todo', 'bug'].includes(note.type) || note.type.endsWith('[]');
 
         noteDiv.appendChild(typeSpan);
         noteDiv.appendChild(textSpan);
@@ -538,9 +544,7 @@ function loadNotesFromFile(event) {
                 if (!note.id || !note.text || !note.type || !note.timestamp) {
                     throw new Error('Invalid note structure: missing required fields');
                 }
-                if (!['note', 'question', 'todo', 'bug'].includes(note.type) && !note.type.startsWith('@')) {
-                    // Allow custom types starting with @
-                }
+                // Allow all types - validation happens at creation time
             }
 
             // If validation passes, confirm replacement
@@ -615,10 +619,11 @@ function saveNotesAs() {
             sortedNotes.forEach(note => {
                 const date = new Date(note.timestamp);
                 const formattedDate = date.toLocaleString(); // Readable date/time
-                const noteType = note.type.toUpperCase();
+                const displayType = note.type.endsWith('[]') ? note.type.slice(0, -2) : note.type;
+                const noteType = displayType.toUpperCase();
 
-                // Add status for special notes (question, todo, bug, custom)
-                const isSpecialNote = ['question', 'todo', 'bug'].includes(note.type) || note.type.startsWith('@');
+                // Add status for special notes (question, todo, bug, custom closable)
+                const isSpecialNote = ['question', 'todo', 'bug'].includes(note.type) || note.type.endsWith('[]');
                 const statusText = isSpecialNote ? ` : ${note.status.toUpperCase()}` : '';
 
                 content += `${formattedDate}: ${noteType}${statusText}\n\n`;

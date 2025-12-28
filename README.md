@@ -236,20 +236,16 @@ show notes in side-bar
 - session id configurable in options to create configurable subfolder (below date)
 - option to - flatten folders into filename e.g. observatron_2025_12_27_sessionid
     - make flatten option the default
-    - 
+- limit the custom note type name length (15 chars)
+- @custom[] (would allow opening and closing because it is a custom with a state - state == [])
+
 ### TODO:
-
-
-- limit the custom note type name length
-- - @custom[] (would allow opening and closing because it is a custom with a state - state == [])
-
 
 - configurable data sizes (mutation text, clicked target text)
 - resize log with screensize change, not just screenshot
 - mouse events - move
 - scan page for broken links when a page is opened (store what url was scanned and only scan once).
 - configurable auto save notes to file every (X minutes, after every note, config)
-
 
 ---
 
@@ -259,6 +255,8 @@ show notes in side-bar
 - 0.98 session improvements
   - session id editable and used for folder name
   - flatten folder into single sub folder rather than nested e.g. 2025/12/27/session vs 2025-12-27-session (flat is default)
+  - limit custom name length
+  - allow custom types to be closed when creatd with `@name[]`
 - 0.97 options and notes (released 20251227)
    - add the options to the notes screen for easier access
      - still available as Manage Extension options

@@ -438,9 +438,11 @@ function saveNoteFromMessage(noteText, withScreenshot, withElementScreenshot) {
   // @type
 
   var noteToLog = getSpecialNoteTypeFromString(noteText);
-  noteToLog.id = noteId.toString();
-  noteToLog.timestamp = new Date().toISOString();
-  noteToLog.status = noteToLog.type === 'note' ? 'closed' : 'open'; // Default status
+   noteToLog.id = noteId.toString();
+   noteToLog.timestamp = new Date().toISOString();
+   // Set default status: closed for notes and non-closable types, open for closable types
+   var isClosable = ['question', 'todo', 'bug'].includes(noteToLog.type) || noteToLog.type.endsWith('[]');
+   noteToLog.status = isClosable ? 'open' : 'closed';
 
   // Add screenshot filenames if requested
   noteToLog.screenshots = [];
@@ -501,7 +503,25 @@ function getSpecialNoteTypeFromString(theString){
       var words = noteText.split(" ");
       var specialConfig = words[0].substring(1);
       if(specialConfig.length>0){
-        specialNote= specialConfig;
+        // Check if it ends with [] for closable custom types
+        var isClosable = specialConfig.endsWith('[]');
+        if(isClosable){
+          specialConfig = specialConfig.slice(0, -2); // Remove []
+        }
+        // Truncate custom type names to 15 characters maximum
+        specialConfig = specialConfig.substring(0, 15);
+
+        // Check if it's actually a standard type name
+        var standardTypes = ['note', 'question', 'todo', 'bug'];
+        if(standardTypes.includes(specialConfig)){
+          specialNote = specialConfig; // Treat as standard type
+        } else {
+          // It's a custom type
+          specialNote = specialConfig;
+          if(isClosable){
+            specialNote += '[]'; // Add [] back for custom closable types
+          }
+        }
       }
       noteText = noteText.substring(words[0].length);
       // TODO filter custom words so that they are suitable as filename portions
