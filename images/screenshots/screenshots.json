@@ -1,0 +1,37 @@
+"screenshots": [
+{
+"src": "screenshots/add-notes-as-you-test.png",
+"sizes": "512x295",
+"type": "image/png",
+"form_factor": "wide",
+"label": "Add notes, bugs, questions, todos and custom types, as you test."
+},
+{
+"src": "screenshots/configure-auto-logging-options.png",
+"sizes": "466x817",
+"type": "image/png",
+"form_factor": "narrow",
+"label": "Configure what events are logged automatically with screenshots."
+},
+{
+"src": "screenshots/notes-are-visible-in-ui.png",
+"sizes": "510x503",
+"type": "image/png",
+"form_factor": "narrow",
+"label": "See what notes you have made and track outstanding questions and todos."
+},
+{
+"src": "screenshots/save-load-notes-as-text-json.png",
+"sizes": "512x229",
+"type": "image/png",
+"form_factor": "wide",
+"label": "Save and load your notes as text and json. Clear notes from memory."
+},
+{
+"src": "screenshots/save-events-and-screenshots-automatically-as-you-test.png",
+"sizes": "491x366",
+"type": "image/png",
+"form_factor": "wide",
+"label": "Save events and changes automatically with screenshots as you test."
+}
+]

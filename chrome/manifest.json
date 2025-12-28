@@ -1,9 +1,9 @@
 {
-  "name": "Test Observer - The Observatron",
-  "version": "0.95",
-  "description": "The Observatron observes things in the browser",
+  "name": "Exploratory Testing Tool - Test Observer - The Observatron",
+  "version": "0.97",
+  "description": "Observes browser actions to automatically create logs and screenshots, while you track and make notes on your testing.",
   "background": {
-    "service_worker": "javascript/background.js"
+    "service_worker": "javascript/worker.js"
   },
   "commands": {
     "log-a-note": {
@@ -24,22 +24,25 @@
     "128": "icons/red-128x128.png"
   },
   "options_page": "options/options_page.html",
+  "devtools_page": "devtools/devtools.html",
   "content_scripts": [
     {
-      "js": ["javascript/screenshotter.js"],
+      "js": ["javascript/page_dom_event_messages.js"],
       "run_at": "document_start",
       "matches": ["http://*/*", "https://*/*"]
     }
   ],
-  "permissions": [
-    "activeTab",
-    "downloads",
-    "webNavigation",
-    "pageCapture",
-    "storage",
-    "webRequest",
-    "contextMenus"
-  ],
+   "permissions": [
+     "activeTab",
+     "downloads",
+     "webNavigation",
+     "pageCapture",
+     "storage",
+     "webRequest",
+     "contextMenus",
+     "sidePanel",
+     "scripting"
+   ],
   "host_permissions": [
     "<all_urls>"
   ],

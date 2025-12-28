@@ -4,8 +4,11 @@
 // Import other scripts
 importScripts('observatron_options.js', 'context_menu.js', 'filenames.js');
 
+console.log("Service worker started/reloaded");
+
 var options = new Options();
 var engagedDomain = null;
+var sideBarSide= "left";
 
 changedOptions();
 
@@ -20,11 +23,18 @@ chrome.storage.onChanged.addListener(storageHasChanged);
 
 // TODO: add and remove listeners based on options, not just soft toggle on variables
 
-chrome.runtime.onMessage.addListener(requested);
+chrome.runtime.onMessage.addListener(requestMethodHandler);
+
+
+if (chrome && chrome.runtime && chrome.runtime.onSuspend) {
+  chrome.runtime.onSuspend.addListener(() => {
+    console.log("Service worker is being suspended/unloaded");
+  });
+}
 
 // Enable Disable on click
-chrome.action.onClicked.addListener(function() {
-  toggle_observatron_status();
+chrome.action.onClicked.addListener((tab) => {
+  toggle_observatron_status(tab);
 });
 
 chrome.webNavigation.onCompleted.addListener(configuredOnPageLoad);
@@ -68,6 +78,7 @@ contextMenus.createMenus();
 
 */
 
+// TODO: this could be a message to set options on the backend
 function storageHasChanged(changes, namespace) {
   if(namespace === "local"){
     if(changes.hasOwnProperty("observatron")){
@@ -108,15 +119,30 @@ function changedOptions(){
 
 // useful info
 //https://stackoverflow.com/questions/13141072/how-to-get-notified-on-window-resize-in-chrome-browser
-//https://github.com/NV/chrome-o-tile/blob/master/chrome/background.js
-function requested(request, sender, sendResponse){
+function requestMethodHandler(request, sender, sendResponse){
 
   // Handle saveNote regardless of engagement status
   if (request.method === 'saveNote') {
-    saveNoteFromMessage(request.noteText, request.withScreenshot);
+    saveNoteFromMessage(request.noteText, request.withScreenshot, request.withElementScreenshot);
+    if (request.withElementScreenshot) {
+      // Refresh element data first
+      chrome.runtime.sendMessage({type: 'updateElementData'});
+      setTimeout(() => {
+        // Get updated selected element data and take screenshot
+        chrome.storage.local.get(['selectedElement', 'inspectedTabId'], function(result) {
+          const element = result.selectedElement;
+          const tabId = result.inspectedTabId;
+          if (element && tabId) {
+            takeElementScreenshot(element.selector, element.rect, tabId);
+          }
+        });
+      }, 500);
+    }
     sendResponse({success: true});
     return true; // Keep the message channel open for async response
   }
+
+
 
   // Handle status requests
   if (request.method === 'getStatus') {
@@ -124,14 +150,36 @@ function requested(request, sender, sendResponse){
     return true;
   }
 
+    if (request.method === 'takeScreenshot') {
+        takeScreenshot();
+        return false;
+    }
+
+    if (request.method === 'savePage') {
+        saveAsMhtml();
+        return false;
+    }
+
+    // all methods above can be triggered manually
+    // below, is automated and the observatron needs to be engaged
   if(!isObservatronEngaged()){
     return false;
+  }
+
+  if (request.method === 'logUserEvent') {
+    console.log(request);
+    console.log(sender);
+    console.log(sendResponse);
+    logEvent(request.event);
+    sendResponse({success: true});
+    return true;
   }
 
   if (request.method === 'resize') {
     if(options.onResizeEvent){
       console.log("shot on resize");
       takeScreenshotIfWeCareAboutPage();
+      return false;
     }
   }
 
@@ -139,6 +187,7 @@ function requested(request, sender, sendResponse){
     if(options.onDoubleClickShot){
       console.log("shot on doubleclick");
       takeScreenshotIfWeCareAboutPage();
+      return false;
     }
   }
 
@@ -146,6 +195,7 @@ function requested(request, sender, sendResponse){
     if(options.onScrollEvent === true){
       console.log("shot on scrolled");
       takeScreenshotIfWeCareAboutPage();
+      return false;
     }
   }
 
@@ -171,7 +221,7 @@ function isTabOnEngagedDomain(tab) {
 
 
 
-function toggle_observatron_status(){
+function toggle_observatron_status(tab){
 
     if(isObservatronEngaged()){
       // switch it off
@@ -183,6 +233,7 @@ function toggle_observatron_status(){
 
       chrome.action.setIcon({path: chrome.runtime.getURL("icons/red.png")});
       chrome.action.setTitle({title:"Engage The Observatron"});
+      showSidePanel(tab.id,false);
 
     }else{
       // switch it on
@@ -216,6 +267,8 @@ function toggle_observatron_status(){
       
       chrome.action.setIcon({path: chrome.runtime.getURL("icons/green.png")});
       chrome.action.setTitle({title:"Disengage The Observatron"});
+            // user must manually show side bar because we also have the devtools
+      //showSidePanel(tab.id,true);
     }
 }
 
@@ -276,19 +329,47 @@ function configuredOnPageLoad(anObject){
   }
 }
 
+async function showSidePanel(tabId, shown){
+
+    var useTabId = tabId;
+    if(useTabId==undefined){
+        const tab = await getCurrentTab();
+        useTabId = tab.id;
+    }
+
+    chrome.sidePanel.setOptions({
+      tabId: useTabId,
+      path: 'sidepanel/sidepanel.html',
+      enabled: shown
+      }, ()=> {
+            if(shown){
+                try{
+                    chrome.sidePanel.open({ tabId: tabId });
+                }catch(e){
+                    console.log("showSidePanel: " + e);
+                }
+            }
+        }
+    );
+}
+
 function configuredOnPageUpdated(tabId, changeInfo, tab){
 
   // https://developer.chrome.com/extensions/tabs#event-onUpdated
   if(!isObservatronEngaged()){
+    showSidePanel(tabId, false);
     return;
   }
 
   // Check if tab is on the engaged domain
   if (!isTabOnEngagedDomain(tab)) {
+    showSidePanel(tabId, false);
     return;
   }
 
   if(options.onPageUpdated){
+
+    showSidePanel(tabId, true);
 
     if(changeInfo.hasOwnProperty("url")){
       downloadAsLog( "url", changeInfo, "url");
@@ -325,10 +406,10 @@ function commandHandler(command){
 
 function logANote(){
   // Open note taking page
-  chrome.tabs.create({url: chrome.runtime.getURL('note.html')});
+  chrome.tabs.create({url: chrome.runtime.getURL('sidepanel/sidepanel.html')});
 }
 
-function saveNoteFromMessage(noteText, withScreenshot) {
+function saveNoteFromMessage(noteText, withScreenshot, withElementScreenshot) {
   var noteId = Math.floor(Date.now());
 
   // is it a special note?
@@ -339,12 +420,42 @@ function saveNoteFromMessage(noteText, withScreenshot) {
 
   var noteToLog = getSpecialNoteTypeFromString(noteText);
   noteToLog.id = noteId.toString();
+  noteToLog.timestamp = new Date().toISOString();
+  noteToLog.status = noteToLog.type === 'note' ? 'closed' : 'open'; // Default status
+
+  // Add screenshot filenames if requested
+  noteToLog.screenshots = [];
+  if (withScreenshot) {
+    var screenshotFilename = getFileName(options.filepath, options.fileprefix, "screenshot_note_" + noteToLog.id, "jpg");
+    noteToLog.screenshots.push(screenshotFilename);
+  }
+  if (withElementScreenshot) {
+    var elementScreenshotFilename = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png");
+    noteToLog.screenshots.push(elementScreenshotFilename);
+  }
+
+  // Store note in local storage
+  chrome.storage.local.get(['observatron_notes'], function(result) {
+    var notes = result.observatron_notes || [];
+    notes.push(noteToLog);
+    chrome.storage.local.set({observatron_notes: notes});
+  });
 
   // TODO store screenshot name in the note as a screenshot property
   downloadAsLog(noteToLog.type+"_"+noteToLog.id, noteToLog);
   if(withScreenshot){
     downloadScreenshot("_note_" + noteToLog.id);
   }
+  if (withElementScreenshot) {
+    // Element screenshot handling is done in the message handler
+  }
+}
+
+function logEvent(event) {
+  var eventId = Math.floor(Date.now());
+
+  console.log(event);
+  downloadAsLog("userEvent"+"_"+eventId, event);
 }
 
 function getSpecialNoteTypeFromString(theString){
@@ -538,6 +649,144 @@ function takeScreenshotIfWeCareAboutPage(){
 
         downloadScreenshot();
       });
+}
+
+function sanitizeRect(rect) {
+  return {
+    left: isFinite(rect.left) ? Math.max(0, Math.min(rect.left, 10000)) : 0,
+    top: isFinite(rect.top) ? Math.max(0, Math.min(rect.top, 10000)) : 0,
+    width: isFinite(rect.width) ? Math.max(1, Math.min(rect.width, 10000)) : 1,
+    height: isFinite(rect.height) ? Math.max(1, Math.min(rect.height, 10000)) : 1
+  };
+}
+
+function getUpdatedRect(selector, tabId, callback) {
+  chrome.scripting.executeScript({
+    target: { tabId: tabId },
+    function: (selector) => {
+      const el = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      if (el) {
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        const rect = el.getBoundingClientRect();
+        if (!isFinite(rect.left) || !isFinite(rect.top) || !isFinite(rect.width) || !isFinite(rect.height)) {
+          return null;
+        }
+        const visibleRect = {
+          left: Math.max(0, rect.left),
+          top: Math.max(0, rect.top),
+          width: Math.min(window.innerWidth - Math.max(0, rect.left), rect.width),
+          height: Math.min(window.innerHeight - Math.max(0, rect.top), rect.height)
+        };
+        const scale = window.devicePixelRatio;
+        return {
+          left: visibleRect.left * scale,
+          top: visibleRect.top * scale,
+          width: visibleRect.width * scale,
+          height: visibleRect.height * scale
+        };
+      }
+      return null;
+    },
+    args: [selector]
+  }, (results) => {
+    if (chrome.runtime.lastError || !results || !results[0]) {
+      callback(null);
+      return;
+    }
+    const result = results[0].result;
+    if (!result || typeof result !== 'object' ||
+        typeof result.left !== 'number' || !isFinite(result.left) ||
+        typeof result.top !== 'number' || !isFinite(result.top) ||
+        typeof result.width !== 'number' || !isFinite(result.width) ||
+        typeof result.height !== 'number' || !isFinite(result.height)) {
+      callback(null);
+      return;
+    }
+    callback(sanitizeRect(result));
+  });
+}
+
+function cropElementScreenshot(dataURL, rect, tabId, callback) {
+  chrome.storage.local.set({tempDataURL: dataURL}, () => {
+    chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      function: (left, top, width, height) => {
+        return new Promise((resolve) => {
+          chrome.storage.local.get(['tempDataURL'], (result) => {
+            const dataURL = result.tempDataURL;
+            chrome.storage.local.remove('tempDataURL');
+            const w = Math.floor(width);
+            const h = Math.floor(height);
+            if (w <= 0 || h <= 0) {
+              resolve(dataURL);
+              return;
+            }
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              canvas.width = w;
+              canvas.height = h;
+              ctx.drawImage(img, left, top, width, height, 0, 0, w, h);
+              resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => {
+              resolve(dataURL);
+            };
+            img.src = dataURL;
+          });
+        });
+      },
+      args: [rect.left, rect.top, rect.width, rect.height]
+    }, (results) => {
+      callback(results && results[0] && results[0].result ? results[0].result : null);
+    });
+  });
+}
+
+function takeElementScreenshot(selector, rect, tabId) {
+  chrome.tabs.get(tabId, (tab) => {
+    if (chrome.runtime.lastError || !tab) {
+      console.warn("Failed to get tab");
+      return;
+    }
+    const windowId = tab.windowId;
+    getUpdatedRect(selector, tabId, (updatedRect) => {
+      if (!updatedRect) {
+        return;
+      }
+      setTimeout(() => {
+        chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataURL) => {
+          if (chrome.runtime.lastError) {
+            return;
+          }
+          cropElementScreenshot(dataURL, updatedRect, tabId, (croppedDataURL) => {
+            if (croppedDataURL) {
+              downloadElementScreenshot(croppedDataURL);
+            }
+          });
+        });
+      }, 500);
+    });
+  });
+}
+
+
+
+function downloadElementScreenshot(dataURL) {
+  const downloadFileName = getFileName(options.filepath, options.fileprefix, "element_screenshot", "png");
+  chrome.downloads.download({
+    url: dataURL,
+    filename: downloadFileName
+  }, function(downloadId) {
+    if (chrome.runtime.lastError) {
+      console.warn('Download failed');
+    }
+  });
+}
+
+function takeScreenshot(){
+    downloadScreenshot();
 }
 
 function downloadScreenshot(additionalPrefix){

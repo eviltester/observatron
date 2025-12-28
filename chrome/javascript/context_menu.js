@@ -5,7 +5,6 @@ function ContextMenus(){
     contextMenus = {};
     contextTypes = ["all", "page", "browser_action"];
 
-    // BUG - don't seem to be passing in functions seems to use globals from background.js, which works, but was not as intended
     this.init = function(downloadScreenshotFunction, saveAsMhtmlFunction, options){
         this.saveAsMhtml = saveAsMhtmlFunction;
         this.options = options;
@@ -18,6 +17,7 @@ function ContextMenus(){
     }
 
     function createMenu(id, title){
+
         return chrome.contextMenus.create(
             {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
     }
@@ -43,6 +43,7 @@ function ContextMenus(){
                 contextMenus.takeScreenshotNow = createMenu("takeScreenshotNow", "Take Screenshot Now");
                 contextMenus.saveAsMhtmlNow = createMenu("saveAsMhtmlNow", "Save as MHTML Now");
                 contextMenus.logNote = createMenu("logNote", "Take Note");
+                contextMenus.showSidePanel = createMenu("showSidePanel", "Show Side Panel");
                 contextMenus.line = createSeparator("separator1");
                 contextMenus.screenshots = createParentMenu("screenshots", "Screenshot");
                     contextMenus.toggleOnScroll = createCheckboxMenu("toggleOnScroll", "on Scroll", options.onScrollEvent, contextMenus.screenshots);
@@ -81,6 +82,9 @@ function ContextMenus(){
                 return;
             case "logNote":
                 logANote();
+                return;
+            case "showSidePanel":
+                showSidePanel(tab.id, true);
                 return;
             case "togglePostSubmit":
                 options.onPostSubmit = !options.onPostSubmit;
