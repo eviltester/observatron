@@ -1,6 +1,6 @@
 {
   "name": "Exploratory Testing Tool - Test Observer - The Observatron",
-  "version": "0.97",
+  "version": "0.98",
   "description": "Observes browser actions to automatically create logs and screenshots, while you track and make notes on your testing.",
   "background": {
     "service_worker": "javascript/worker.js"
