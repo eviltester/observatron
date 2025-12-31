@@ -1,0 +1,41 @@
+{
+  "name": "observatron",
+  "version": "1.0.0",
+  "description": "A Chrome browser extension for exploratory testing observation",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:chrome": "eslint chrome/",
+    "lint:tests": "eslint test/ --quiet",
+    "build": "node scripts/build.js",
+    "package": "node scripts/package.js",
+    "clean": "rimraf dist coverage",
+    "prepackage": "npm run build"
+  },
+  "keywords": [
+    "chrome-extension",
+    "testing",
+    "exploratory-testing",
+    "browser-extension"
+  ],
+  "author": "Alan Richardson",
+  "license": "MIT",
+  "devDependencies": {
+    "vitest": "^2.1.0",
+    "@vitest/coverage-v8": "^2.1.0",
+    "jsdom": "^25.0.0",
+    "eslint": "^9.0.0",
+    "@eslint/js": "^9.0.0",
+    "fs-extra": "^11.2.0",
+    "archiver": "^7.0.0",
+    "rimraf": "^6.0.0"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
