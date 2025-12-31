@@ -1,8 +1,11 @@
 // TODO: when update options, refresh code in each current tab
 // https://stackoverflow.com/questions/10994324/chrome-extension-content-script-re-injection-after-upgrade-or-install/11598753#11598753
 
-// Import other scripts
+ // Import other scripts
 importScripts('observatron_options.js', 'context_menu.js', 'filenames.js');
+
+// Import testable utility functions
+importScripts('note_parser.js', 'geometry_utils.js');
 
 console.log("Service worker started/reloaded");
 
@@ -20,10 +23,11 @@ chrome.storage.local.get(['observatron'], function(result) {
   }
   changedOptions();
 });
-
+ 
 /*
-    Event Routing Configuration
-*/
+   STORAGE
+   */
+
 
 
 // https://developer.chrome.com/extensions/storage
@@ -494,70 +498,10 @@ function saveNoteFromMessage(noteText, withScreenshot, withElementScreenshot) {
 
 function logEvent(event) {
   var eventId = Math.floor(Date.now());
-
   console.log(event);
   downloadAsLog("userEvent"+"_"+eventId, event);
 }
 
-function getSpecialNoteTypeFromString(theString){
-  var specialNote = "note";
-  var noteText = theString;
-
-  var firstChar = noteText.substring(0,1);
-
-  switch(firstChar){
-    case "?":
-      specialNote = "question";
-      noteText = noteText.substring(1);
-      break;
-    case "!":
-      specialNote = "bug";
-      noteText = noteText.substring(1);
-      break;
-    case "-":
-      specialNote = "todo";
-      noteText = noteText.substring(1);
-      break;
-    case "@":
-
-      var words = noteText.split(" ");
-      var specialConfig = words[0].substring(1);
-      if(specialConfig.length>0){
-        // Check if it ends with [] for closable custom types
-        var isClosable = specialConfig.endsWith('[]');
-        if(isClosable){
-          specialConfig = specialConfig.slice(0, -2); // Remove []
-        }
-        // Truncate custom type names to 15 characters maximum
-        specialConfig = specialConfig.substring(0, 15);
-
-        // Check if it's actually a standard type name
-        var standardTypes = ['note', 'question', 'todo', 'bug'];
-        if(standardTypes.includes(specialConfig)){
-          specialNote = specialConfig; // Treat as standard type
-        } else {
-          // It's a custom type
-          specialNote = specialConfig;
-          if(isClosable){
-            specialNote += '[]'; // Add [] back for custom closable types
-          }
-        }
-      }
-      noteText = noteText.substring(words[0].length);
-      // TODO filter custom words so that they are suitable as filename portions
-  }
-
-  noteText = noteText.trim();
-
-  return {type: specialNote, text: noteText};
-}
-
-
-/*
-
-  DOWNLOADS
-
-*/
 
 
 function saveAsMhtml(anId){
@@ -710,31 +654,9 @@ function takeScreenshotIfWeCareAboutPage(){
       });
 }
 
-function sanitizeRect(rect) {
-  return {
-    left: isFinite(rect.left) ? Math.max(0, Math.min(rect.left, 10000)) : 0,
-    top: isFinite(rect.top) ? Math.max(0, Math.min(rect.top, 10000)) : 0,
-    width: isFinite(rect.width) ? Math.max(1, Math.min(rect.width, 10000)) : 1,
-    height: isFinite(rect.height) ? Math.max(1, Math.min(rect.height, 10000)) : 1
-  };
-}
 
-function validateRect(rect, imgWidth, imgHeight) {
-  const validated = {
-    left: Math.max(0, Math.min(rect.left, imgWidth)),
-    top: Math.max(0, Math.min(rect.top, imgHeight)),
-    width: Math.max(1, Math.min(rect.width, imgWidth - Math.max(0, rect.left))),
-    height: Math.max(1, Math.min(rect.height, imgHeight - Math.max(0, rect.top)))
-  };
-  
-  // Ensure the rectangle is valid
-  if (validated.width <= 0 || validated.height <= 0) {
-    validated.width = Math.max(1, validated.width);
-    validated.height = Math.max(1, validated.height);
-  }
-  
-  return validated;
-}
+
+
 
 function getUpdatedRect(selector, tabId, callback) {
   chrome.scripting.executeScript({
