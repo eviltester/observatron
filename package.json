@@ -4,14 +4,14 @@
   "description": "A Chrome browser extension for exploratory testing observation",
   "main": "index.js",
   "scripts": {
-    "test": "vitest",
+    "test": "vitest run",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "lint": "npm run lint:chrome && npm run lint:tests",
+    "lint:fix": "npm run lint:chrome -- --fix && npm run lint:tests -- --fix",
     "lint:chrome": "eslint chrome/",
     "lint:tests": "eslint test/ --quiet",
-    "build": "node scripts/build.js",
+    "build": "npm run lint && npm run test && node scripts/build.js",
     "package": "node scripts/package.js",
     "clean": "rimraf dist coverage",
     "prepackage": "npm run build"

@@ -8,7 +8,6 @@ export default [
       'coverage/**',
       'node_modules/**',
       'release/*.zip',
-      'test/**',
       'scripts/**',
       'eslint.config.js',
       'vitest.config.js'
@@ -77,6 +76,31 @@ export default [
       'no-undef': 'off',
       'no-redeclare': 'off',
       'no-new-func': 'off'
+    }
+  },
+  {
+    files: ['test/**/*'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        // Vitest globals
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        vi: 'readonly',
+        // Test-specific globals
+        global: 'readonly',
+        // Chrome mock globals
+        chrome: 'writable'
+      }
+    },
+    rules: {
+      'no-unused-vars': 'off', // Disable for test files to avoid mock function parameter issues
+      'no-console': 'off',
+      'no-undef': 'off'
     }
   }
 ]

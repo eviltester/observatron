@@ -251,6 +251,10 @@ show notes in side-bar
 
 # Versions
 
+- 1.0
+  - added tests and build process
+  - tidied logging
+  - added event listeners only when enabled
 - 0.99 bug fixes for enablement and element screenshots
 - 0.98 session improvements
   - session id editable and used for folder name

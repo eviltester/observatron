@@ -1,8 +1,10 @@
 import fs from 'fs-extra'
 import path from 'path'
+import archiver from 'archiver'
 
 const srcDir = path.join(process.cwd(), 'chrome')
 const distDir = path.join(process.cwd(), 'dist')
+const releaseDir = path.join(process.cwd(), 'release')
 
 async function build() {
   console.log('🔨 Building Observatron extension...')
@@ -36,12 +38,53 @@ async function build() {
       throw new Error('Invalid manifest.json: missing required fields')
     }
 
+    // Create release directory if it doesn't exist
+    if (!await fs.pathExists(releaseDir)) {
+      console.log('📁 Creating release directory...')
+      await fs.mkdir(releaseDir)
+    }
+
+    // Create zip filename with version
+    const zipFilename = `observatron-v-${manifest.version}.zip`
+    const zipPath = path.join(releaseDir, zipFilename)
+
+    // Create zip file
+    console.log(`📦 Creating zip file: ${zipFilename}...`)
+    await createZip(distDir, zipPath)
+
     console.log(`✅ Build complete! Extension version: ${manifest.version}`)
     console.log(`📦 Output directory: ${distDir}`)
+    console.log(`📦 Zip file: ${zipPath}`)
   } catch (error) {
     console.error('❌ Build failed:', error.message)
     process.exit(1)
   }
+}
+
+async function createZip(sourceDir, outputPath) {
+  return new Promise((resolve, reject) => {
+    // Create output stream
+    const output = fs.createWriteStream(outputPath)
+    const archive = archiver('zip', {
+      zlib: { level: 9 } // Maximum compression
+    })
+
+    // Handle errors
+    output.on('error', reject)
+    archive.on('error', reject)
+
+    // Handle completion
+    archive.on('end', resolve)
+
+    // Pipe archive data to the file
+    archive.pipe(output)
+
+    // Add all files from the source directory
+    archive.directory(sourceDir, false)
+
+    // Finalize the archive
+    archive.finalize()
+  })
 }
 
 build()
