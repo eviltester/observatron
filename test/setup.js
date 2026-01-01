@@ -21,6 +21,7 @@ function loadSourceFile(relativePath) {
 // Load source files
 loadSourceFile('chrome/javascript/filenames.js')
 loadSourceFile('chrome/javascript/observatron_options.js')
+loadSourceFile('chrome/javascript/geometry_utils.js')
 
 // Global chrome mock
 global.chrome = createChromeMock()
