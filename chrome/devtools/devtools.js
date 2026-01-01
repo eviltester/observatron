@@ -10,7 +10,6 @@ chrome.storage.local.set({inspectedTabId: chrome.devtools.inspectedWindow.tabId}
 // Listen for messages from sidepanel
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'updateElementData') {
-    console.log('DevTools: Received updateElementData message');
 chrome.devtools.inspectedWindow.eval(`
       function getCSSSelector(el) {
         if (el.id) return '#' + el.id;
@@ -86,16 +85,12 @@ chrome.devtools.inspectedWindow.eval(`
         }
         return desc;
       }
-    $0 ? {outerHTML: $0.outerHTML, description: describeElement($0, ''), selector: getCSSSelector($0), rect: $0.getBoundingClientRect(), nodeType: $0.nodeType, nodeName: $0.nodeName} : null;
+$0 ? {outerHTML: $0.outerHTML, description: describeElement($0, ''), selector: getCSSSelector($0), rect: $0.getBoundingClientRect(), nodeType: $0.nodeType, nodeName: $0.nodeName} : null;
     `, (result, isException) => {
       if (isException) {
         console.error('DevTools: Error in updateElementData:', isException);
       } else if (result) {
-        console.log('DevTools: Element data updated:', result);
-        console.log('Generated selector:', result.selector);
         chrome.storage.local.set({selectedElement: result});
-      } else {
-        console.warn('DevTools: No element selected for update ($0 is null)');
       }
     });
   }
@@ -103,7 +98,6 @@ chrome.devtools.inspectedWindow.eval(`
 
 // Store selected element info in storage for sidepanel access
 chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
-  console.log('DevTools: Element selection changed');
 
   chrome.devtools.inspectedWindow.eval(`
     function getCSSSelector(el) {
@@ -168,10 +162,8 @@ chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
         }
 
         let result = path.length > 0 ? path.join(' > ') : el.nodeName.toLowerCase();
-        console.log('Generated CSS selector:', result, 'for element:', el, 'path length:', path.length);
         return result;
       } catch (error) {
-        console.warn('Error generating CSS selector:', error);
         return '';
       }
     }
@@ -199,16 +191,12 @@ chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
       }
       return desc;
     }
-      $0 ? {outerHTML: $0.outerHTML, description: describeElement($0, ''), selector: getCSSSelector($0), rect: $0.getBoundingClientRect(), nodeType: $0.nodeType, nodeName: $0.nodeName} : null;
+$0 ? {outerHTML: $0.outerHTML, description: describeElement($0, ''), selector: getCSSSelector($0), rect: $0.getBoundingClientRect(), nodeType: $0.nodeType, nodeName: $0.nodeName} : null;
     `, (result, isException) => {
       if (isException) {
         console.error('DevTools: Error in updateElementData:', isException);
       } else if (result) {
-        console.log('DevTools: Element data updated:', result);
-        console.log('Generated selector:', result.selector);
         chrome.storage.local.set({selectedElement: result});
-      } else {
-        console.warn('DevTools: No element selected for update ($0 is null)');
       }
     });
 });

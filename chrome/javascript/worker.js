@@ -1,8 +1,11 @@
 // TODO: when update options, refresh code in each current tab
 // https://stackoverflow.com/questions/10994324/chrome-extension-content-script-re-injection-after-upgrade-or-install/11598753#11598753
 
-// Import other scripts
+ // Import other scripts
 importScripts('observatron_options.js', 'context_menu.js', 'filenames.js');
+
+// Import testable utility functions
+importScripts('note_parser.js', 'geometry_utils.js', 'worker_screenshot_utils.js');
 
 console.log("Service worker started/reloaded");
 
@@ -20,10 +23,11 @@ chrome.storage.local.get(['observatron'], function(result) {
   }
   changedOptions();
 });
-
+ 
 /*
-    Event Routing Configuration
-*/
+   STORAGE
+   */
+
 
 
 // https://developer.chrome.com/extensions/storage
@@ -247,10 +251,10 @@ function isObservatronEngaged(){
   return options.engaged;
 }
 
-function isTabOnEngagedDomain(tab) {
+function isTabOnEngagedDomain(taburl) {
   if (!engagedDomain) return false;
   try {
-    const tabDomain = new URL(tab.url).hostname;
+    const tabDomain = new URL(taburl).hostname;
     return tabDomain === engagedDomain;
   } catch (e) {
     return false;
@@ -358,7 +362,7 @@ function configuredOnPageLoad(anObject){
 
     // Check if the navigation is on the engaged domain
     chrome.tabs.get(anObject.tabId, function(tab) {
-      if (tab && isTabOnEngagedDomain(tab)) {
+      if (tab && isTabOnEngagedDomain(tab.url)) {
         downloadAsLog( "url", anObject, "url");
         saveAsMhtml(anObject.tabId);
         takeScreenshotIfWeCareAboutPage();
@@ -401,7 +405,7 @@ function configuredOnPageUpdated(tabId, changeInfo, tab){
   }
 
   // Check if tab is on the engaged domain
-  if (!isTabOnEngagedDomain(tab)) {
+  if (!isTabOnEngagedDomain(tab.url)) {
     showSidePanel(tabId, false);
     return;
   }
@@ -494,70 +498,10 @@ function saveNoteFromMessage(noteText, withScreenshot, withElementScreenshot) {
 
 function logEvent(event) {
   var eventId = Math.floor(Date.now());
-
   console.log(event);
   downloadAsLog("userEvent"+"_"+eventId, event);
 }
 
-function getSpecialNoteTypeFromString(theString){
-  var specialNote = "note";
-  var noteText = theString;
-
-  var firstChar = noteText.substring(0,1);
-
-  switch(firstChar){
-    case "?":
-      specialNote = "question";
-      noteText = noteText.substring(1);
-      break;
-    case "!":
-      specialNote = "bug";
-      noteText = noteText.substring(1);
-      break;
-    case "-":
-      specialNote = "todo";
-      noteText = noteText.substring(1);
-      break;
-    case "@":
-
-      var words = noteText.split(" ");
-      var specialConfig = words[0].substring(1);
-      if(specialConfig.length>0){
-        // Check if it ends with [] for closable custom types
-        var isClosable = specialConfig.endsWith('[]');
-        if(isClosable){
-          specialConfig = specialConfig.slice(0, -2); // Remove []
-        }
-        // Truncate custom type names to 15 characters maximum
-        specialConfig = specialConfig.substring(0, 15);
-
-        // Check if it's actually a standard type name
-        var standardTypes = ['note', 'question', 'todo', 'bug'];
-        if(standardTypes.includes(specialConfig)){
-          specialNote = specialConfig; // Treat as standard type
-        } else {
-          // It's a custom type
-          specialNote = specialConfig;
-          if(isClosable){
-            specialNote += '[]'; // Add [] back for custom closable types
-          }
-        }
-      }
-      noteText = noteText.substring(words[0].length);
-      // TODO filter custom words so that they are suitable as filename portions
-  }
-
-  noteText = noteText.trim();
-
-  return {type: specialNote, text: noteText};
-}
-
-
-/*
-
-  DOWNLOADS
-
-*/
 
 
 function saveAsMhtml(anId){
@@ -702,7 +646,7 @@ function takeScreenshotIfWeCareAboutPage(){
         }
 
         // Check if tab is on the engaged domain
-        if (!isTabOnEngagedDomain(tabs[0])) {
+        if (!isTabOnEngagedDomain(tabs[0].url)) {
           return;
         }
 
@@ -710,250 +654,13 @@ function takeScreenshotIfWeCareAboutPage(){
       });
 }
 
-function sanitizeRect(rect) {
-  return {
-    left: isFinite(rect.left) ? Math.max(0, Math.min(rect.left, 10000)) : 0,
-    top: isFinite(rect.top) ? Math.max(0, Math.min(rect.top, 10000)) : 0,
-    width: isFinite(rect.width) ? Math.max(1, Math.min(rect.width, 10000)) : 1,
-    height: isFinite(rect.height) ? Math.max(1, Math.min(rect.height, 10000)) : 1
-  };
-}
 
-function validateRect(rect, imgWidth, imgHeight) {
-  const validated = {
-    left: Math.max(0, Math.min(rect.left, imgWidth)),
-    top: Math.max(0, Math.min(rect.top, imgHeight)),
-    width: Math.max(1, Math.min(rect.width, imgWidth - Math.max(0, rect.left))),
-    height: Math.max(1, Math.min(rect.height, imgHeight - Math.max(0, rect.top)))
-  };
-  
-  // Ensure the rectangle is valid
-  if (validated.width <= 0 || validated.height <= 0) {
-    validated.width = Math.max(1, validated.width);
-    validated.height = Math.max(1, validated.height);
-  }
-  
-  return validated;
-}
 
-function getUpdatedRect(selector, tabId, callback) {
-  chrome.scripting.executeScript({
-    target: { tabId: tabId },
-    function: (selector) => {
-      try {
-        console.log('Attempting to find element with selector:', selector);
-        if (!selector || selector.trim() === '') {
-          console.warn('Empty or invalid selector provided');
-          return null;
-        }
 
-        // Try to find element in main document
-        let el = document.querySelector(selector);
-        if (el) {
-          console.log('Element found in main document:', el);
-        } else {
-          // Try to find in iframes
-          console.log('Element not found in main document, checking iframes...');
-          const iframes = document.querySelectorAll('iframe');
-          for (const iframe of iframes) {
-            try {
-              const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-              if (iframeDoc) {
-                el = iframeDoc.querySelector(selector);
-                if (el) {
-                  console.log('Element found in iframe:', el);
-                  break;
-                }
-              }
-            } catch (e) {
-              console.warn('Could not access iframe content:', e);
-            }
-          }
-        }
 
-        if (!el) {
-          console.warn('Element not found with selector:', selector, 'in main document or iframes');
-          return null;
-        }
 
-        // Check if element is still in the DOM and visible
-        if (!document.contains(el) && !Array.from(document.querySelectorAll('iframe')).some(iframe => {
-          try {
-            const doc = iframe.contentDocument || iframe.contentWindow.document;
-            return doc && doc.contains(el);
-          } catch (e) {
-            return false;
-          }
-        })) {
-          console.warn('Element is no longer in the DOM');
-          return null;
-        }
-        
-        // Get element position relative to document BEFORE scrolling
-        function getElementPositionRelativeToDocument(element) {
-          let rect = element.getBoundingClientRect();
-          let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-          let scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-          
-          return {
-            top: rect.top + scrollTop,
-            left: rect.left + scrollLeft,
-            width: rect.width,
-            height: rect.height
-          };
-        }
-        
-        const elementPosition = getElementPositionRelativeToDocument(el);
-        console.log('Element position relative to document:', elementPosition);
-        
-        // Scroll element into view to ensure it's visible
-        el.scrollIntoView({ block: 'center', inline: 'center' });
-        
-        // Wait a bit for scroll to complete
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            // Now get the element's position relative to the viewport
-            const rect = el.getBoundingClientRect();
-            console.log('Element rect after scrolling:', rect);
-            
-            if (!isFinite(rect.left) || !isFinite(rect.top) || !isFinite(rect.width) || !isFinite(rect.height)) {
-              console.warn('Invalid rect for element:', rect);
-              resolve(null);
-              return;
-            }
-            
-            if (rect.width <= 0 || rect.height <= 0) {
-              console.warn('Element has zero size:', rect);
-              resolve(null);
-              return;
-            }
-            
-            // Ensure element is within viewport bounds
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            
-            // Calculate visible portion of element
-            const visibleRect = {
-              left: Math.max(0, rect.left),
-              top: Math.max(0, rect.top),
-              width: Math.min(viewportWidth - Math.max(0, rect.left), rect.width),
-              height: Math.min(viewportHeight - Math.max(0, rect.top), rect.height)
-            };
-            
-            console.log('Visible rect before scaling:', visibleRect);
-            
-            if (visibleRect.width <= 0 || visibleRect.height <= 0) {
-              console.warn('Element not visible in viewport:', visibleRect);
-              resolve(null);
-              return;
-            }
-            
-            // captureVisibleTab captures the viewport, so use viewport-relative coordinates
-            // The screenshot is already scaled by devicePixelRatio, so we need to account for that
-            const scale = window.devicePixelRatio;
-            const scaledRect = {
-              left: Math.round(visibleRect.left * scale),
-              top: Math.round(visibleRect.top * scale),
-              width: Math.round(visibleRect.width * scale),
-              height: Math.round(visibleRect.height * scale)
-            };
-            
-            console.log('Final scaled rect for cropping:', scaledRect);
-            console.log('Device pixel ratio:', scale);
-            console.log('Viewport dimensions:', { width: viewportWidth, height: viewportHeight });
-            
-            resolve(scaledRect);
-          }, 300); // Longer delay to ensure scroll completes and element is positioned
-        });
-      } catch (error) {
-        console.error('Error getting element rect:', error);
-        return null;
-      }
-    },
-    args: [selector]
-  }, (results) => {
-    if (chrome.runtime.lastError) {
-      console.warn('Script execution error:', chrome.runtime.lastError);
-      callback(null);
-      return;
-    }
-    if (!results || !results[0]) {
-      console.warn('No script results');
-      callback(null);
-      return;
-    }
-    const result = results[0].result;
-    if (!result || typeof result !== 'object' ||
-        typeof result.left !== 'number' || !isFinite(result.left) ||
-        typeof result.top !== 'number' || !isFinite(result.top) ||
-        typeof result.width !== 'number' || !isFinite(result.width) ||
-        typeof result.height !== 'number' || !isFinite(result.height)) {
-      console.warn('Invalid result from script:', result);
-      callback(null);
-      return;
-    }
-    const sanitized = sanitizeRect(result);
-    console.log('Using sanitized rect for cropping:', sanitized);
-    callback(sanitized);
-  });
-}
 
-function cropElementScreenshot(dataURL, rect, tabId, callback) {
-  chrome.storage.local.set({tempDataURL: dataURL}, () => {
-    chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      function: (left, top, width, height) => {
-        return new Promise((resolve) => {
-          chrome.storage.local.get(['tempDataURL'], (result) => {
-            const dataURL = result.tempDataURL;
-            chrome.storage.local.remove('tempDataURL');
-            const w = Math.max(1, Math.floor(width));
-            const h = Math.max(1, Math.floor(height));
-            if (w <= 0 || h <= 0) {
-              resolve(dataURL);
-              return;
-            }
-            const img = new Image();
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              canvas.width = w;
-              canvas.height = h;
-              
-              // Validate and adjust crop coordinates
-              const imgWidth = img.width;
-              const imgHeight = img.height;
-              const validatedRect = {
-                left: Math.max(0, Math.min(left, imgWidth)),
-                top: Math.max(0, Math.min(top, imgHeight)),
-                width: Math.max(1, Math.min(width, imgWidth - Math.max(0, left))),
-                height: Math.max(1, Math.min(height, imgHeight - Math.max(0, top)))
-              };
-              
-              // Ensure the crop area is valid
-              if (validatedRect.width <= 0 || validatedRect.height <= 0) {
-                resolve(dataURL); // Return original if crop area is invalid
-                return;
-              }
-              
-              console.log('Cropping with validated rect:', validatedRect, 'from image size:', { width: imgWidth, height: imgHeight });
-              
-              ctx.drawImage(img, validatedRect.left, validatedRect.top, validatedRect.width, validatedRect.height, 0, 0, w, h);
-              resolve(canvas.toDataURL('image/png'));
-            };
-            img.onerror = () => {
-              resolve(dataURL);
-            };
-            img.src = dataURL;
-          });
-        });
-      },
-      args: [rect.left, rect.top, rect.width, rect.height]
-    }, (results) => {
-      callback(results && results[0] && results[0].result ? results[0].result : null);
-    });
-  });
-}
+
 
 function takeElementScreenshot(selector, rect, tabId) {
   console.log('Taking element screenshot for selector:', selector, 'on tab:', tabId);

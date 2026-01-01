@@ -1,4 +1,3 @@
-
 chrome/observator-0-2-release.zip
 release/observator-0-2-release.zip
 release/observatron-v-0-3.zip
@@ -8,3 +7,23 @@ release/observatron-v-0-8.zip
 release/observatron-v-0-9.zip
 /observatron.iml
 /.idea/
+
+# Node
+node_modules/
+package-lock.json
+
+# Test coverage
+coverage/
+
+# Build output
+dist/
+
+# Release zips (keep specific ones)
+release/*.zip
+!release/observatron-v-0-6.zip
+!release/observatron-v-0-7.zip
+!release/observatron-v-0-92.zip
+!release/observatron-v-0-95.zip
+!release/observatron-v-0-97.zip
+!release/observatron-v-0-98.zip
+!release/observatron-v-0-99.zip

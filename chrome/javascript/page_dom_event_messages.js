@@ -14,16 +14,25 @@ var dblClickTimeout = {timeout: 0, milliseconds: 0, message: {method: "screensho
 
 var isObservatronEngaged = false;
 var engagedDomain = null;
+var eventListenersActive = false;
 
+// Store references to event listeners for removal
+var eventListeners = {
+  input: null,
+  click: null,
+  resize: null,
+  scroll: null,
+  dblclick: null
+};
 
 // Listen for disconnection from background script
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   if (request.method === 'observatronStatusChanged') {
     isObservatronEngaged = request.engaged;
     engagedDomain = request.domain;
+    updateEventListeners();
   }
 });
-
 
 // TODO: other options might also have changed should handle that too
 chrome.storage.onChanged.addListener(function(changes, namespace) {
@@ -31,6 +40,7 @@ chrome.storage.onChanged.addListener(function(changes, namespace) {
     if(changes.hasOwnProperty("observatron")){
       isObservatronEngaged = changes["observatron"].newValue.engaged;
       // Note: domain changes are sent via message, not storage
+      updateEventListeners();
     }
   }
 });
@@ -40,6 +50,7 @@ chrome.storage.local.get(['observatron'], function(result) {
   if (result && result.observatron) {
     isObservatronEngaged = result.observatron.engaged;
     console.log("Initial observatron status loaded:", isObservatronEngaged);
+    updateEventListeners();
   } else {
     console.log("No observatron status found in storage");
   }
@@ -54,6 +65,7 @@ if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
         isObservatronEngaged = response.engaged;
         engagedDomain = response.domain;
         console.log("Status received from background:", {engaged: isObservatronEngaged, domain: engagedDomain});
+        updateEventListeners();
       }
       if (chrome.runtime.lastError) {
         console.log("Error requesting status:", chrome.runtime.lastError.message);
@@ -69,11 +81,13 @@ chrome.storage.local.get(['observatron_screenshotter'], setObservatronDefaults);
 
 
 function setObservatronDefaults(options){
-  if(options){
+  if(options && options.observatron_screenshotter){
     scrollingTimeout.milliseconds = options.observatron_screenshotter.resize_timeout;
     resizingTimeout.milliseconds = options.observatron_screenshotter.scrolling_timeout;
     console.log("set defaults from observatron");
     console.log(options);
+  } else {
+    console.log("No observatron_screenshotter options found, using defaults");
   }
 }
 
@@ -84,10 +98,9 @@ function setObservatronDefaults(options){
   e.g. in 7charVal - can't detect the output message for invalid and valid
 */
 
-// capture input events
-window.addEventListener(
-  "input",
-  (e) => {
+// Create event listener functions
+function createInputEventListener() {
+  return function(e) {
     const el = e.target;
 
     if (el instanceof HTMLInputElement ||
@@ -107,14 +120,11 @@ window.addEventListener(
                 }
             );
     }
-  },
-  true // capture phase (important!)
-);
+  };
+}
 
-// click, anywhere
-window.addEventListener(
-  "click",
-  (e) => {
+function createClickEventListener() {
+  return function(e) {
     const el = e.target;
 
     sendAMessage(
@@ -130,13 +140,26 @@ window.addEventListener(
               }
         }
     );
+  };
+}
 
-  },
-  true // capture phase (important!)
-);
+function createResizeEventListener() {
+  return function() {
+    sendResizeMessage();
+  };
+}
 
+function createScrollEventListener() {
+  return function() {
+    sendScrollMessage();
+  };
+}
 
-
+function createDblClickEventListener() {
+  return function() {
+    sendDblClickMessage();
+  };
+}
 
 // MutationObserver for DOM changes
 var mutationObserver = new MutationObserver(function(mutations) {
@@ -201,9 +224,63 @@ if (document.body) {
   });
 }
 
-window.addEventListener('resize', sendResizeMessage, false);
-window.addEventListener('scroll', sendScrollMessage, false);
-window.addEventListener('dblclick', sendDblClickMessage, false);
+// Function to add or remove event listeners based on observatron status
+function updateEventListeners() {
+  // Remove existing listeners if they exist
+  if (eventListenersActive) {
+    removeEventListeners();
+  }
+
+  // Add listeners if observatron is engaged
+  if (isObservatronEngaged) {
+    addEventListeners();
+    eventListenersActive = true;
+  } else {
+    eventListenersActive = false;
+  }
+}
+
+function addEventListeners() {
+  // Create and store event listeners
+  eventListeners.input = createInputEventListener();
+  eventListeners.click = createClickEventListener();
+  eventListeners.resize = createResizeEventListener();
+  eventListeners.scroll = createScrollEventListener();
+  eventListeners.dblclick = createDblClickEventListener();
+
+  // Add event listeners
+  window.addEventListener("input", eventListeners.input, true);
+  window.addEventListener("click", eventListeners.click, true);
+  window.addEventListener("resize", eventListeners.resize, false);
+  window.addEventListener("scroll", eventListeners.scroll, false);
+  window.addEventListener("dblclick", eventListeners.dblclick, false);
+}
+
+function removeEventListeners() {
+  // Remove event listeners
+  if (eventListeners.input) {
+    window.removeEventListener("input", eventListeners.input, true);
+  }
+  if (eventListeners.click) {
+    window.removeEventListener("click", eventListeners.click, true);
+  }
+  if (eventListeners.resize) {
+    window.removeEventListener("resize", eventListeners.resize, false);
+  }
+  if (eventListeners.scroll) {
+    window.removeEventListener("scroll", eventListeners.scroll, false);
+  }
+  if (eventListeners.dblclick) {
+    window.removeEventListener("dblclick", eventListeners.dblclick, false);
+  }
+
+  // Clear references
+  eventListeners.input = null;
+  eventListeners.click = null;
+  eventListeners.resize = null;
+  eventListeners.scroll = null;
+  eventListeners.dblclick = null;
+}
 
 function sendResizeMessage(){
   sendAMessageWhenTimeoutComplete(resizingTimeout);
@@ -254,9 +331,10 @@ function sendAMessage( message){
       if (chrome.runtime.lastError) {
         if (chrome.runtime.lastError.message.includes('Extension context invalidated') ||
             chrome.runtime.lastError.message.includes('message port closed')) {
-            // ignore errors
+            // ignore expected errors
+            return;
         }
-        // Don't log expected errors
+        // Log unexpected errors
         console.log("observatron lastError " + chrome.runtime.lastError)
       }
     });
