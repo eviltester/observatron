@@ -41,7 +41,10 @@ document.getElementById('takeScreenshot').addEventListener('click', function() {
         method: 'takeScreenshot'
     }, function(response) {
         if (chrome.runtime.lastError) {
-            console.warn("Failed to take screenshot:", chrome.runtime.lastError.message);
+            // Only log unexpected errors, ignore expected message port closure
+            if (!chrome.runtime.lastError.message.includes('message port closed')) {
+                console.warn("Failed to take screenshot:", chrome.runtime.lastError.message);
+            }
         }
     });
 });
@@ -52,7 +55,10 @@ document.getElementById('savePage').addEventListener('click', function() {
         method: 'savePage'
     }, function(response) {
         if (chrome.runtime.lastError) {
-            console.warn("Failed to savePage:", chrome.runtime.lastError.message);
+            // Only log unexpected errors, ignore expected message port closure
+            if (!chrome.runtime.lastError.message.includes('message port closed')) {
+                console.warn("Failed to savePage:", chrome.runtime.lastError.message);
+            }
         }
     });
 });
@@ -68,7 +74,10 @@ document.getElementById('takeElementScreenshot').addEventListener('click', funct
             tabId: currentTabId
         }, function(response) {
             if (chrome.runtime.lastError) {
-                console.warn("Failed to take element screenshot:", chrome.runtime.lastError.message);
+                // Only log unexpected errors, ignore expected message port closure
+                if (!chrome.runtime.lastError.message.includes('message port closed')) {
+                    console.warn("Failed to take element screenshot:", chrome.runtime.lastError.message);
+                }
             }
         });
     });
