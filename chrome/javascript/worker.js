@@ -114,7 +114,8 @@ function changedOptions(){
         chrome.tabs.sendMessage(tab.id, {
           method: 'observatronStatusChanged',
           engaged: options.engaged,
-          domain: engagedDomain
+          domain: engagedDomain,
+          onPageMutation: options.onPageMutation
         }).catch(() => {
           // Ignore errors for tabs that don't have content scripts
         });
@@ -234,15 +235,20 @@ function requestMethodHandler(request, sender, sendResponse){
     }
   }
 
-  if (request.method === 'scrolled') {
-    if(options.onScrollEvent === true){
-      console.log("shot on scrolled");
-      takeScreenshotIfWeCareAboutPage();
-      return false;
-    }
-  }
+   if (request.method === 'scrolled') {
+     if(options.onScrollEvent === true){
+       console.log("shot on scrolled");
+       takeScreenshotIfWeCareAboutPage();
+       return false;
+     }
+   }
 
-  return false;
+   if (request.method === 'htmlCommentsFound') {
+     handleHtmlComments(request.comments, request.url);
+     return true;
+   }
+
+   return false;
 
 }
 
@@ -272,6 +278,9 @@ function toggle_observatron_status(tab){
       options.engaged = false;
       engagedDomain = null; // Clear the engaged domain
 
+      // Clear HTML comment hashes
+      chrome.storage.session.set({htmlCommentHashes: []});
+
       changedOptions();
 
       chrome.action.setIcon({path: chrome.runtime.getURL("icons/red.png")});
@@ -282,6 +291,9 @@ function toggle_observatron_status(tab){
       // switch it on
       console.log("Observatron Engaged");
       options.engaged=true;
+
+      // Clear HTML comment hashes for new session
+      chrome.storage.session.set({htmlCommentHashes: []});
 
       // Record the current domain
       chrome.tabs.query({ currentWindow: true, active: true }, function(tabs) {
@@ -343,9 +355,7 @@ function configuredOnPageLoad(anObject){
     //console.log(options);
     //console.log(anObject);
 
-  if(options.onPageLoad){
-
-    console.log("page load");
+  if(options.onPageLoad || options.onPageLoadDetectHtmlComments || options.onPageLoadLogHtmlCommentsAsNotes){
 
     if(!anObject.hasOwnProperty('frameId')){
       return;
@@ -360,16 +370,30 @@ function configuredOnPageLoad(anObject){
       return;
     }
 
-    // Check if the navigation is on the engaged domain
-    chrome.tabs.get(anObject.tabId, function(tab) {
-      if (tab && isTabOnEngagedDomain(tab.url)) {
-        downloadAsLog( "url", anObject, "url");
-        saveAsMhtml(anObject.tabId);
-        takeScreenshotIfWeCareAboutPage();
-      }
-    });
+     // Check if the navigation is on the engaged domain
+     chrome.tabs.get(anObject.tabId, function(tab) {
+       if (tab && isTabOnEngagedDomain(tab.url)) {
+         if(options.onPageLoad){
+           console.log("page load");
+           downloadAsLog( "url", anObject, "url");
+           saveAsMhtml(anObject.tabId);
+           takeScreenshotIfWeCareAboutPage();
+         }
 
-  }
+         if (options.onPageLoadDetectHtmlComments || options.onPageLoadLogHtmlCommentsAsNotes) {
+           chrome.storage.session.get(['htmlCommentHashes'], function(result) {
+             const seenHashes = result.htmlCommentHashes || [];
+             chrome.tabs.sendMessage(anObject.tabId, {
+               method: 'scanHtmlComments',
+               detectEnabled: options.onPageLoadDetectHtmlComments,
+               seenHashes: seenHashes
+             });
+           });
+         }
+       }
+     });
+
+   }
 }
 
 async function showSidePanel(tabId, shown){
@@ -493,7 +517,36 @@ function saveNoteFromMessage(noteText, withScreenshot, withElementScreenshot) {
   }
   if (withElementScreenshot) {
     // Element screenshot handling is done in the message handler
-  }
+   }
+}
+
+function simpleHash(str) {
+   let hash = 5381;
+   for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) + str.charCodeAt(i);
+   }
+   return hash;
+}
+
+async function handleHtmlComments(comments, url) {
+   // Load existing seen hashes
+   const result = await chrome.storage.session.get(['htmlCommentHashes']);
+   const seenHashes = new Set(result.htmlCommentHashes || []);
+
+   // Comments received are already filtered to be new
+   for (const comment of comments) {
+      const hash = simpleHash(comment);
+      seenHashes.add(hash);
+   }
+
+   // Save all new comments in a single note
+   if (options.onPageLoadLogHtmlCommentsAsNotes && comments.length > 0) {
+      const noteText = `@AutoNote found on URL ${url} HTML Comments -\n${comments.join('\n')}`;
+      saveNoteFromMessage(noteText, false, false);
+   }
+
+   // Save updated hashes
+   chrome.storage.session.set({htmlCommentHashes: Array.from(seenHashes)});
 }
 
 function logEvent(event) {

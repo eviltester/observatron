@@ -46,6 +46,30 @@ function buildOptionsUI(containerId) {
         container.appendChild(document.createElement('br'));
     });
 
+    // Screenshots and Snapshot Logging sub-section
+    const h3Screenshots = document.createElement('h3');
+    h3Screenshots.textContent = 'Screenshots and Snapshot Logging';
+    container.appendChild(h3Screenshots);
+    const pSnapshotLogging = document.createElement('p');
+    pSnapshotLogging.textContent = 'Take screenshots and save MHTML snapshots on page events:';
+    container.appendChild(pSnapshotLogging);
+
+    const snapshotCheckboxes = [
+        {id: 'onpageload', label: 'On Page Load'},
+        {id: 'onpageupdated', label: 'On Page Updated'}
+    ];
+
+    snapshotCheckboxes.forEach(cb => {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = cb.id;
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(' ' + cb.label));
+        container.appendChild(label);
+        container.appendChild(document.createElement('br'));
+    });
+
     // Logging Configuration
     const h2Logging = document.createElement('h2');
     h2Logging.textContent = 'Logging Configuration';
@@ -55,11 +79,34 @@ function buildOptionsUI(containerId) {
     container.appendChild(pLogging);
 
     const loggingCheckboxes = [
-        {id: 'onpageload', label: 'On Page Load'},
-        {id: 'onpageupdated', label: 'On Page Updated'},
         {id: 'onpostformsubmit', label: 'Log POST form contents to a file'}
     ];
+
+    // Event Logging sub-section
+    const h3EventLogging = document.createElement('h3');
+    h3EventLogging.textContent = 'Event Logging';
+    container.appendChild(h3EventLogging);
+    const pEventLogging = document.createElement('p');
+    pEventLogging.textContent = 'Log specific events without taking screenshots or saving MHTML:';
+    container.appendChild(pEventLogging);
+
+    const eventLoggingCheckboxes = [
+        {id: 'onpageloaddetecthtmlcomments', label: 'On Page Load - Detect HTML Comments'},
+        {id: 'onpageloadloghtmlcommentsasnotes', label: 'On Page Load - Log HTML Comments as Notes'},
+        {id: 'onpagemutation', label: 'On Page Mutation'}
+    ];
     loggingCheckboxes.forEach(cb => {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = cb.id;
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(' ' + cb.label));
+        container.appendChild(label);
+        container.appendChild(document.createElement('br'));
+    });
+
+    eventLoggingCheckboxes.forEach(cb => {
         const label = document.createElement('label');
         const input = document.createElement('input');
         input.type = 'checkbox';
@@ -92,6 +139,15 @@ function buildOptionsUI(containerId) {
     fileprefixLabel.appendChild(fileprefixInput);
     fileprefixLabel.appendChild(document.createTextNode(' File Prefix:'));
     container.appendChild(fileprefixLabel);
+    container.appendChild(document.createElement('br'));
+
+    const sessionNameLabel = document.createElement('label');
+    const sessionNameInput = document.createElement('input');
+    sessionNameInput.type = 'text';
+    sessionNameInput.id = 'sessionname';
+    sessionNameLabel.appendChild(sessionNameInput);
+    sessionNameLabel.appendChild(document.createTextNode(' Session Name:'));
+    container.appendChild(sessionNameLabel);
     container.appendChild(document.createElement('br'));
 
     const folderStructureLabel = document.createElement('label');
@@ -172,24 +228,52 @@ function save_options() {
     newOptions.setOnPageUpdated(document.getElementById('onpageupdated').checked);
     newOptions.setOnDoubleClickShot(document.getElementById('ondoubleclick').checked);
     newOptions.setOnPostSubmit(document.getElementById('onpostformsubmit').checked);
+    newOptions.setOnPageLoadDetectHtmlComments(document.getElementById('onpageloaddetecthtmlcomments').checked);
+    newOptions.setOnPageLoadLogHtmlCommentsAsNotes(document.getElementById('onpageloadloghtmlcommentsasnotes').checked);
+    newOptions.setOnPageMutation(document.getElementById('onpagemutation').checked);
 
     newOptions.setScrollingTimeoutMilliseconds(document.getElementById('scrolling_timeout').value);
     newOptions.setResizeTimeoutMilliseconds(document.getElementById('resize_timeout').value);
 
     newOptions.setFilePath(document.getElementById('filepath').value);
     newOptions.setFilePrefix(document.getElementById('fileprefix').value);
+    newOptions.setSessionName(document.getElementById('sessionname').value);
     newOptions.setFolderStructure(document.getElementById('folderStructure').value);
 
     options = newOptions;
 
-    chrome.storage.local.set({observatron: options}, function() {
-      // Update status to let user know options were saved.
-      var status = document.getElementById('status');
-      status.textContent = 'Options saved.';
-      setTimeout(function() {
-        status.textContent = '';
-      }, 750);
-    });
+    try {
+      chrome.storage.local.set({observatron: options}, function() {
+        if (chrome.runtime.lastError) {
+          if (!chrome.runtime.lastError.message.includes('Extension context invalidated')) {
+            console.error('Error saving options:', chrome.runtime.lastError);
+            var status = document.getElementById('status');
+            status.textContent = 'Error saving options.';
+            setTimeout(function() {
+              status.textContent = '';
+            }, 750);
+          }
+          // Ignore "Extension context invalidated" errors
+          return;
+        }
+        // Update status to let user know options were saved.
+        var status = document.getElementById('status');
+        status.textContent = 'Options saved.';
+        setTimeout(function() {
+          status.textContent = '';
+        }, 750);
+      });
+    } catch (error) {
+      if (!error.message.includes('Extension context invalidated')) {
+        console.error('Error in save_options:', error);
+        var status = document.getElementById('status');
+        status.textContent = 'Error saving options.';
+        setTimeout(function() {
+          status.textContent = '';
+        }, 750);
+      }
+      // Ignore "Extension context invalidated" errors
+    }
   }
   
   // Restores select box and checkbox state using the preferences
@@ -214,15 +298,19 @@ function setObservatronDefaults(setoptions){
 function displayObservatronOptionsOnGUI(options){
   //console.log(options);
 
-  document.getElementById('onscroll').checked = options.onScrollEvent;
-  document.getElementById('onresize').checked = options.onResizeEvent;
-  document.getElementById('onpageload').checked = options.onPageLoad;
-  document.getElementById('onpageupdated').checked = options.onPageUpdated;
-  document.getElementById('ondoubleclick').checked = options.onDoubleClickShot;
-  document.getElementById('onpostformsubmit').checked = options.onPostSubmit;
-   document.getElementById('filepath').value = options.filepath;
-   document.getElementById('fileprefix').value = options.fileprefix;
-   document.getElementById('folderStructure').value = options.folderStructure;
+   document.getElementById('onscroll').checked = options.onScrollEvent;
+   document.getElementById('onresize').checked = options.onResizeEvent;
+   document.getElementById('onpageload').checked = options.onPageLoad;
+   document.getElementById('onpageupdated').checked = options.onPageUpdated;
+   document.getElementById('ondoubleclick').checked = options.onDoubleClickShot;
+   document.getElementById('onpostformsubmit').checked = options.onPostSubmit;
+   document.getElementById('onpageloaddetecthtmlcomments').checked = options.onPageLoadDetectHtmlComments;
+   document.getElementById('onpageloadloghtmlcommentsasnotes').checked = options.onPageLoadLogHtmlCommentsAsNotes;
+   document.getElementById('onpagemutation').checked = options.onPageMutation;
+    document.getElementById('filepath').value = options.filepath;
+    document.getElementById('fileprefix').value = options.fileprefix;
+    document.getElementById('sessionname').value = options.sessionName;
+    document.getElementById('folderStructure').value = options.folderStructure;
    document.getElementById('scrolling_timeout').value = options.scrolling_timeout_milliseconds;
    document.getElementById('resize_timeout').value = options.resize_timeout_milliseconds;
   

@@ -14,7 +14,16 @@ var dblClickTimeout = {timeout: 0, milliseconds: 0, message: {method: "screensho
 
 var isObservatronEngaged = false;
 var engagedDomain = null;
+var onPageMutation = false;
 var eventListenersActive = false;
+
+function simpleHash(str) {
+   let hash = 5381;
+   for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) + str.charCodeAt(i);
+   }
+   return hash;
+}
 
 // Store references to event listeners for removal
 var eventListeners = {
@@ -27,22 +36,64 @@ var eventListeners = {
 
 // Listen for disconnection from background script
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  if (request.method === 'observatronStatusChanged') {
-    isObservatronEngaged = request.engaged;
-    engagedDomain = request.domain;
-    updateEventListeners();
-  }
+   if (request.method === 'observatronStatusChanged') {
+      isObservatronEngaged = request.engaged;
+      engagedDomain = request.domain;
+      onPageMutation = request.onPageMutation || false;
+      updateEventListeners();
+   }
+
+   if (request.method === 'scanHtmlComments') {
+      if (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain) return;
+
+      const comments = [];
+      const walker = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
+      let node;
+      while ((node = walker.nextNode()) !== null) {
+         const text = node.textContent.trim();
+         if (text) {
+            comments.push(text);
+         }
+      }
+
+      const seenHashes = new Set(request.seenHashes || []);
+      const newComments = [];
+      let hasDuplicates = false;
+
+      for (const comment of comments) {
+         const hash = simpleHash(comment);
+         if (!seenHashes.has(hash)) {
+            newComments.push(comment);
+            if (request.detectEnabled) {
+               console.log('HTML Comment detected:', comment);
+            }
+         } else {
+            hasDuplicates = true;
+         }
+      }
+
+      if (request.detectEnabled && hasDuplicates) {
+         console.log('duplicate HTML comments found in page');
+      }
+
+      chrome.runtime.sendMessage({
+         method: 'htmlCommentsFound',
+         comments: newComments,
+         url: window.location.href
+      });
+   }
 });
 
 // TODO: other options might also have changed should handle that too
 chrome.storage.onChanged.addListener(function(changes, namespace) {
-  if(namespace === "local"){
-    if(changes.hasOwnProperty("observatron")){
-      isObservatronEngaged = changes["observatron"].newValue.engaged;
-      // Note: domain changes are sent via message, not storage
-      updateEventListeners();
-    }
-  }
+   if(namespace === "local"){
+     if(changes.hasOwnProperty("observatron")){
+       isObservatronEngaged = changes["observatron"].newValue.engaged;
+       onPageMutation = changes["observatron"].newValue.onPageMutation || false;
+       // Note: domain changes are sent via message, not storage
+       updateEventListeners();
+     }
+   }
 });
 
 // Load initial engagement status
@@ -163,9 +214,9 @@ function createDblClickEventListener() {
 
 // MutationObserver for DOM changes
 var mutationObserver = new MutationObserver(function(mutations) {
-  // Only log if observatron is engaged and on correct domain
-  if (!isObservatronEngaged) return;
-  if (!engagedDomain) return;
+   // Only log if observatron is engaged, on correct domain, and option is enabled
+   if (!isObservatronEngaged || !onPageMutation) return;
+   if (!engagedDomain) return;
 
   try {
     const currentDomain = window.location.hostname;

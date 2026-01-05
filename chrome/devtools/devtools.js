@@ -71,26 +71,71 @@ chrome.devtools.inspectedWindow.eval(`
 
         return path.join(' > ');
       }
-      function describeElement(el, indent) {
-        if (!el) return '';
-        let desc = indent + '- ' + el.tagName.toLowerCase();
-        if (el.id) desc += ' id="' + el.id + '"';
-        if (el.className) desc += ' class="' + el.className + '"';
-        if (el.name) desc += ' name="' + el.name + '"';
-        if (el.type) desc += ' type="' + el.type + '"';
-        if (el.value) desc += ' value="' + el.value + '"';
-        if (el.innerText && el.innerText.trim()) desc += ' text="' + el.innerText.trim().replace(/"/g, '\\\\"') + '"';
-        for (let child of el.children) {
-          desc += '\\n' + describeElement(child, indent + '  ');
-        }
-        return desc;
-      }
+       function safeGetProperty(obj, prop, defaultValue = '') {
+         try {
+           const value = obj[prop];
+           return value !== undefined ? String(value) : defaultValue;
+         } catch (e) {
+           return defaultValue;
+         }
+       }
+
+       function describeElement(el, indent) {
+         if (!el) return '';
+         let desc = indent + '- ' + safeGetProperty(el, 'tagName', '').toLowerCase();
+
+         const id = safeGetProperty(el, 'id');
+         if (id) desc += ' id="' + id + '"';
+
+         const className = safeGetProperty(el, 'className');
+         if (className) desc += ' class="' + className + '"';
+
+         const name = safeGetProperty(el, 'name');
+         if (name) desc += ' name="' + name + '"';
+
+         const type = safeGetProperty(el, 'type');
+         if (type) desc += ' type="' + type + '"';
+
+         const value = safeGetProperty(el, 'value');
+         if (value) desc += ' value="' + value + '"';
+
+         const innerText = safeGetProperty(el, 'innerText');
+         if (innerText && innerText.trim()) desc += ' text="' + innerText.trim().replace(/"/g, '\\\\"') + '"';
+
+         try {
+           for (let child of el.children) {
+             desc += '\\n' + describeElement(child, indent + '  ');
+           }
+         } catch (e) {
+           // Ignore errors when accessing children
+         }
+
+         return desc;
+       }
 $0 ? {outerHTML: $0.outerHTML, description: describeElement($0, ''), selector: getCSSSelector($0), rect: $0.getBoundingClientRect(), nodeType: $0.nodeType, nodeName: $0.nodeName} : null;
     `, (result, isException) => {
-      if (isException) {
-        console.error('DevTools: Error in updateElementData:', isException);
-      } else if (result) {
-        chrome.storage.local.set({selectedElement: result});
+      try {
+        if (isException) {
+          console.error('DevTools: Error in updateElementData:', isException);
+        } else if (result) {
+          if (!chrome || !chrome.storage || !chrome.storage.local) {
+            // Extension context invalidated, storage not available
+            return;
+          }
+          try {
+            chrome.storage.local.set({selectedElement: result});
+          } catch (error) {
+            if (!error.message || !error.message.includes('Extension context invalidated')) {
+              console.error('DevTools: Error setting selectedElement:', error);
+            }
+            // Ignore "Extension context invalidated" errors as they are expected when extension reloads
+          }
+        }
+      } catch (error) {
+        if (!error.message || !error.message.includes('Extension context invalidated')) {
+          console.error('DevTools: Error in describeElement callback:', error);
+        }
+        // Ignore "Extension context invalidated" errors
       }
     });
   }
@@ -177,26 +222,71 @@ chrome.devtools.panels.elements.onSelectionChanged.addListener(() => {
       }
     }
     
+    function safeGetProperty(obj, prop, defaultValue = '') {
+      try {
+        const value = obj[prop];
+        return value !== undefined ? String(value) : defaultValue;
+      } catch (e) {
+        return defaultValue;
+      }
+    }
+
     function describeElement(el, indent) {
       if (!el) return '';
-      let desc = indent + '- ' + el.tagName.toLowerCase();
-      if (el.id) desc += ' id="' + el.id + '"';
-      if (el.className) desc += ' class="' + el.className + '"';
-      if (el.name) desc += ' name="' + el.name + '"';
-      if (el.type) desc += ' type="' + el.type + '"';
-      if (el.value) desc += ' value="' + el.value + '"';
-      if (el.innerText && el.innerText.trim()) desc += ' text="' + el.innerText.trim().replace(/"/g, '\\\\"') + '"';
-      for (let child of el.children) {
-        desc += '\\n' + describeElement(child, indent + '  ');
+      let desc = indent + '- ' + safeGetProperty(el, 'tagName', '').toLowerCase();
+
+      const id = safeGetProperty(el, 'id');
+      if (id) desc += ' id="' + id + '"';
+
+      const className = safeGetProperty(el, 'className');
+      if (className) desc += ' class="' + className + '"';
+
+      const name = safeGetProperty(el, 'name');
+      if (name) desc += ' name="' + name + '"';
+
+      const type = safeGetProperty(el, 'type');
+      if (type) desc += ' type="' + type + '"';
+
+      const value = safeGetProperty(el, 'value');
+      if (value) desc += ' value="' + value + '"';
+
+      const innerText = safeGetProperty(el, 'innerText');
+      if (innerText && innerText.trim()) desc += ' text="' + innerText.trim().replace(/"/g, '\\\\"') + '"';
+
+      try {
+        for (let child of el.children) {
+          desc += '\\n' + describeElement(child, indent + '  ');
+        }
+      } catch (e) {
+        // Ignore errors when accessing children
       }
+
       return desc;
     }
 $0 ? {outerHTML: $0.outerHTML, description: describeElement($0, ''), selector: getCSSSelector($0), rect: $0.getBoundingClientRect(), nodeType: $0.nodeType, nodeName: $0.nodeName} : null;
     `, (result, isException) => {
-      if (isException) {
-        console.error('DevTools: Error in updateElementData:', isException);
-      } else if (result) {
-        chrome.storage.local.set({selectedElement: result});
+      try {
+        if (isException) {
+          console.error('DevTools: Error in updateElementData:', isException);
+        } else if (result) {
+          if (!chrome || !chrome.storage || !chrome.storage.local) {
+            // Extension context invalidated, storage not available
+            return;
+          }
+          try {
+            chrome.storage.local.set({selectedElement: result});
+          } catch (error) {
+            if (!error.message || !error.message.includes('Extension context invalidated')) {
+              console.error('DevTools: Error setting selectedElement:', error);
+            }
+            // Ignore "Extension context invalidated" errors as they are expected when extension reloads
+          }
+        }
+      } catch (error) {
+        if (!error.message || !error.message.includes('Extension context invalidated')) {
+          console.error('DevTools: Error in describeElement callback:', error);
+        }
+        // Ignore "Extension context invalidated" errors
       }
     });
 });

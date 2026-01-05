@@ -251,6 +251,8 @@ show notes in side-bar
 
 # Versions
 
+- 1.0.1
+   - migrated html comment detection from Test Tool Hub
 - 1.0
   - added tests and build process
   - tidied logging

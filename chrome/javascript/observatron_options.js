@@ -47,6 +47,15 @@ Options.prototype.setOnDoubleClickShot = function(value){
 Options.prototype.setOnPostSubmit = function(value){
     this.setBooleanPropertyIfValid("onPostSubmit", value);
 };
+Options.prototype.setOnPageLoadDetectHtmlComments = function(value){
+    this.setBooleanPropertyIfValid("onPageLoadDetectHtmlComments", value);
+};
+Options.prototype.setOnPageLoadLogHtmlCommentsAsNotes = function(value){
+    this.setBooleanPropertyIfValid("onPageLoadLogHtmlCommentsAsNotes", value);
+};
+Options.prototype.setOnPageMutation = function(value){
+    this.setBooleanPropertyIfValid("onPageMutation", value);
+};
 Options.prototype.setScrollingTimeoutMilliseconds = function(value){
     this.setNumericPropertyIfValid("scrolling_timeout_milliseconds", value);
 }
@@ -80,6 +89,9 @@ function getDefaultOptions() {
         onPageUpdated: false,
         onDoubleClickShot: true,
         onPostSubmit: false,
+        onPageLoadDetectHtmlComments: false,
+        onPageLoadLogHtmlCommentsAsNotes: false,
+        onPageMutation: false,
         filepath: "observatron/",
         fileprefix: "obs_",
         sessionName: "",

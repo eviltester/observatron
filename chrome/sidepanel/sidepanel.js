@@ -322,7 +322,8 @@ function renderNotes(notes) {
 
         const textSpan = document.createElement('span');
         const { truncated, isTruncated } = truncateNoteText(note.text);
-        textSpan.innerHTML = truncated.replace(/\n/g, '<br>');
+        textSpan.style.whiteSpace = 'pre-wrap';
+        textSpan.textContent = truncated;
         textSpan.setAttribute('data-full-text', note.text);
         textSpan.setAttribute('data-truncated', isTruncated ? 'true' : 'false');
         textSpan.setAttribute('data-expanded', 'false');
@@ -508,12 +509,12 @@ function toggleNoteExpansion(noteId) {
     if (isExpanded) {
         // Collapse
         const { truncated } = truncateNoteText(fullText);
-        textSpan.innerHTML = truncated.replace(/\n/g, '<br>');
+        textSpan.textContent = truncated;
         expandButton.textContent = 'Show More';
         textSpan.setAttribute('data-expanded', 'false');
     } else {
         // Expand
-        textSpan.innerHTML = fullText.replace(/\n/g, '<br>');
+        textSpan.textContent = fullText;
         expandButton.textContent = 'Show Less';
         textSpan.setAttribute('data-expanded', 'true');
     }
