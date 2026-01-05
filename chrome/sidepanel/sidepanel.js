@@ -600,10 +600,22 @@ chrome.storage.onChanged.addListener(function(changes, namespace) {
     }
 });
 
+// Background processes status
+function updateQueueStatus() {
+    chrome.storage.session.get(['brokenLinkQueue', 'brokenImageQueue'], function(result) {
+        const linkQueue = result.brokenLinkQueue || [];
+        const imageQueue = result.brokenImageQueue || [];
+        document.getElementById('linkQueueLength').textContent = linkQueue.length;
+        document.getElementById('imageQueueLength').textContent = imageQueue.length;
+    });
+}
+
 // Load notes on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadNotes();
     loadSessionName();
+    updateQueueStatus(); // Initial update
+    setInterval(updateQueueStatus, 2000); // Update every 2 seconds
     document.getElementById('saveNotes').addEventListener('click', saveNotesAs);
     document.getElementById('loadNotes').addEventListener('click', () => {
         document.getElementById('notesFileInput').click();

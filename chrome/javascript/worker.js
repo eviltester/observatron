@@ -333,34 +333,26 @@ function toggle_observatron_status(tab){
        console.log('Observatron: Clearing broken image queue and hashes for new session');
        chrome.storage.session.set({brokenImageQueue: [], brokenImageHashes: []});
 
-      // Record the current domain
-      chrome.tabs.query({ currentWindow: true, active: true }, function(tabs) {
-        if (tabs[0] && tabs[0].url) {
-          try {
-            engagedDomain = new URL(tabs[0].url).hostname;
-            console.log("Observatron engaged on domain:", engagedDomain);
-          } catch (e) {
-            engagedDomain = null;
-            console.log("Could not parse domain from URL:", tabs[0].url);
-          }
-        }
-        simulatePageLoadForTab(tabs);
-      });
+       // Record the current domain and update UI
+       chrome.tabs.query({ currentWindow: true, active: true }, function(tabs) {
+         if (tabs[0] && tabs[0].url) {
+           try {
+             engagedDomain = new URL(tabs[0].url).hostname;
+             console.log("Observatron engaged on domain:", engagedDomain);
+           } catch (e) {
+             engagedDomain = null;
+             console.log("Could not parse domain from URL:", tabs[0].url);
+           }
+         }
+         simulatePageLoadForTab(tabs);
 
-      changedOptions();
+         // Update UI after domain is set
+         chrome.action.setIcon({path: chrome.runtime.getURL("icons/green.png")});
+         chrome.action.setTitle({title:"Disengage The Observatron from " + (engagedDomain || 'unknown')});
+         showSidePanel(tab.id,true);
+       });
 
-      chrome.storage.local.set({observatron_screenshotter:
-                                   {resize_timeout: options.resize_timeout_milliseconds,
-                                    scrolling_timeout: options.resize_timeout_milliseconds}
-                                 });
-
-      // tabs.getCurrent provided an undefined tab  
-      //chrome.tabs.getCurrent(simulatePageLoadForTab);
-
-      
-       chrome.action.setIcon({path: chrome.runtime.getURL("icons/green.png")});
-       chrome.action.setTitle({title:"Disengage The Observatron"});
-       showSidePanel(tab.id,true);
+       changedOptions();
     }
 }
 
