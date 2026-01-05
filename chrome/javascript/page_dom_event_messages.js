@@ -80,11 +80,53 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
          console.log('duplicate HTML comments found in page');
       }
 
-      chrome.runtime.sendMessage({
-         method: 'htmlCommentsFound',
-         comments: newComments,
-         url: window.location.href
-      });
+       chrome.runtime.sendMessage({
+          method: 'htmlCommentsFound',
+          comments: newComments,
+          url: window.location.href
+       });
+    }
+
+    if (request.method === 'scanBrokenLinks') {
+       if (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain) return;
+
+       const links = [];
+       const anchors = document.querySelectorAll('a[href]');
+       const checkedHashes = new Set(request.checkedHashes || []);
+
+       for (const el of anchors) {
+          const href = el.href;
+          if (!href) continue;
+
+          let url;
+          try {
+             url = new URL(href, window.location.href).href;
+          } catch (e) {
+             continue; // Invalid URL
+          }
+
+          // Skip non-HTTP/HTTPS
+          if (!url.startsWith('http://') && !url.startsWith('https://')) continue;
+
+          const hash = simpleHash(url);
+          if (!checkedHashes.has(hash)) {
+             let text = el.textContent.trim() || el.innerText.trim() || '[no text]';
+             if (text.length > 100) {
+                text = text.substring(0, 100) + '...';
+             }
+             links.push({ url, source: window.location.href, hash, text });
+          }
+       }
+
+       if (links.length > 0) {
+          console.log('Observatron: Sending', links.length, 'broken links to check');
+          chrome.runtime.sendMessage({
+             method: 'brokenLinksFound',
+             links: links
+          });
+       } else {
+          console.log('Observatron: No new broken links to check');
+       }
    }
 
     if (request.method === 'scanCommentsForSave') {

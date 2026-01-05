@@ -245,10 +245,15 @@ function requestMethodHandler(request, sender, sendResponse){
      }
    }
 
-   if (request.method === 'htmlCommentsFound') {
-     handleHtmlComments(request.comments, request.url);
-     return true;
-   }
+    if (request.method === 'htmlCommentsFound') {
+      handleHtmlComments(request.comments, request.url);
+      return true;
+    }
+
+    if (request.method === 'brokenLinksFound') {
+      handleBrokenLinks(request.links);
+      return false;
+    }
 
    return false;
 
@@ -280,8 +285,11 @@ function toggle_observatron_status(tab){
       options.engaged = false;
       engagedDomain = null; // Clear the engaged domain
 
-      // Clear HTML comment hashes
-      chrome.storage.session.set({htmlCommentHashes: []});
+       // Clear HTML comment hashes
+       chrome.storage.session.set({htmlCommentHashes: []});
+       // Clear broken link queue and hashes
+       console.log('Observatron: Clearing broken link queue and hashes on disengage');
+       chrome.storage.session.set({brokenLinkQueue: [], brokenLinkHashes: []});
 
       changedOptions();
 
@@ -294,8 +302,11 @@ function toggle_observatron_status(tab){
       console.log("Observatron Engaged");
       options.engaged=true;
 
-      // Clear HTML comment hashes for new session
-      chrome.storage.session.set({htmlCommentHashes: []});
+       // Clear HTML comment hashes for new session
+       chrome.storage.session.set({htmlCommentHashes: []});
+       // Clear broken link queue and hashes for new session
+       console.log('Observatron: Clearing broken link queue and hashes for new session');
+       chrome.storage.session.set({brokenLinkQueue: [], brokenLinkHashes: []});
 
       // Record the current domain
       chrome.tabs.query({ currentWindow: true, active: true }, function(tabs) {
@@ -382,16 +393,26 @@ function configuredOnPageLoad(anObject){
            takeScreenshotIfWeCareAboutPage();
          }
 
-         if (options.onPageLoadDetectHtmlComments || options.onPageLoadLogHtmlCommentsAsNotes) {
-           chrome.storage.session.get(['htmlCommentHashes'], function(result) {
-             const seenHashes = result.htmlCommentHashes || [];
-             chrome.tabs.sendMessage(anObject.tabId, {
-               method: 'scanHtmlComments',
-               detectEnabled: options.onPageLoadDetectHtmlComments,
-               seenHashes: seenHashes
-             });
-           });
-         }
+          if (options.onPageLoadDetectHtmlComments || options.onPageLoadLogHtmlCommentsAsNotes) {
+            chrome.storage.session.get(['htmlCommentHashes'], function(result) {
+              const seenHashes = result.htmlCommentHashes || [];
+              chrome.tabs.sendMessage(anObject.tabId, {
+                method: 'scanHtmlComments',
+                detectEnabled: options.onPageLoadDetectHtmlComments,
+                seenHashes: seenHashes
+              });
+            });
+          }
+
+          if (options.reportBrokenLinks) {
+            chrome.storage.session.get(['brokenLinkHashes'], function(result) {
+              const checkedHashes = result.brokenLinkHashes || [];
+              chrome.tabs.sendMessage(anObject.tabId, {
+                method: 'scanBrokenLinks',
+                checkedHashes: checkedHashes
+              });
+            });
+          }
        }
      });
 
@@ -523,24 +544,130 @@ function simpleHash(str) {
 }
 
 async function handleHtmlComments(comments, url) {
-   // Load existing seen hashes
-   const result = await chrome.storage.session.get(['htmlCommentHashes']);
-   const seenHashes = new Set(result.htmlCommentHashes || []);
+    // Load existing seen hashes
+    const result = await chrome.storage.session.get(['htmlCommentHashes']);
+    const seenHashes = new Set(result.htmlCommentHashes || []);
 
-   // Comments received are already filtered to be new
-   for (const comment of comments) {
-      const hash = simpleHash(comment);
-      seenHashes.add(hash);
-   }
+    // Comments received are already filtered to be new
+    for (const comment of comments) {
+       const hash = simpleHash(comment);
+       seenHashes.add(hash);
+    }
 
-   // Save all new comments in a single note
-   if (options.onPageLoadLogHtmlCommentsAsNotes && comments.length > 0) {
-      const noteText = `@AutoNote found on URL ${url} HTML Comments -\n${comments.join('\n')}`;
-      saveNoteFromMessage(noteText, false, false);
-   }
+    // Save all new comments in a single note
+    if (options.onPageLoadLogHtmlCommentsAsNotes && comments.length > 0) {
+       const noteText = `@AutoNote found on URL ${url} HTML Comments -\n${comments.join('\n')}`;
+       saveNoteFromMessage(noteText, false, false);
+    }
 
-   // Save updated hashes
-   chrome.storage.session.set({htmlCommentHashes: Array.from(seenHashes)});
+    // Save updated hashes
+    chrome.storage.session.set({htmlCommentHashes: Array.from(seenHashes)});
+}
+
+async function handleBrokenLinks(links) {
+    console.log('Observatron: Handling broken links, received count:', links.length);
+    // Load existing queue and checked hashes
+    const result = await chrome.storage.session.get(['brokenLinkQueue', 'brokenLinkHashes']);
+    let queue = result.brokenLinkQueue || [];
+    const checkedHashes = new Set(result.brokenLinkHashes || []);
+
+    console.log('Observatron: Existing queue length:', queue.length, 'checked hashes:', checkedHashes.size);
+
+    // Add new links to queue if not already checked
+    let added = 0;
+    for (const link of links) {
+        if (!checkedHashes.has(link.hash)) {
+            queue.push(link);
+            checkedHashes.add(link.hash);
+            added++;
+        }
+    }
+
+    console.log('Observatron: Added', added, 'new links to queue. New queue length:', queue.length);
+
+    // Save updated queue and hashes
+    chrome.storage.session.set({
+        brokenLinkQueue: queue,
+        brokenLinkHashes: Array.from(checkedHashes)
+    });
+
+    // Start processing if not already running
+    processBrokenLinkQueue();
+}
+
+async function processBrokenLinkQueue() {
+    const result = await chrome.storage.session.get(['brokenLinkQueue']);
+    let queue = result.brokenLinkQueue || [];
+
+    console.log('Observatron: Processing broken link queue, current length:', queue.length);
+
+    if (queue.length === 0) {
+        console.log('Observatron: Queue empty, stopping processing');
+        return;
+    }
+
+    const link = queue.shift(); // Process first item
+    console.log('Observatron: Processing link:', link.url, 'from', link.source);
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), options.reportBrokenLinksTimeoutMs);
+
+        let headResponse = null;
+        let headStatus = null;
+        try {
+            console.log('Observatron: Sending HEAD request to:', link.url);
+            headResponse = await fetch(link.url, { method: 'HEAD', signal: controller.signal });
+            headStatus = headResponse.status;
+            console.log('Observatron: HEAD response status:', headStatus);
+            if (headResponse.redirected) {
+                console.log('Observatron: Redirect detected:', link.url, '->', headResponse.url);
+            }
+        } catch (error) {
+            headStatus = 'error';
+            console.log('Observatron: HEAD request failed:', error.message);
+        }
+        clearTimeout(timeoutId);
+
+        let getStatus = null;
+        if (headStatus === 'error' || headStatus >= 400) {
+            // Try GET
+            const getController = new AbortController();
+            const getTimeoutId = setTimeout(() => getController.abort(), options.reportBrokenLinksTimeoutMs);
+            try {
+                console.log('Observatron: Sending GET request to:', link.url);
+                const getResponse = await fetch(link.url, { method: 'GET', signal: getController.signal });
+                getStatus = getResponse.status;
+                console.log('Observatron: GET response status:', getStatus);
+                if (getResponse.redirected) {
+                    console.log('Observatron: Redirect detected:', link.url, '->', getResponse.url);
+                }
+            } catch (error) {
+                getStatus = 'error';
+                console.log('Observatron: GET request failed:', error.message);
+            }
+            clearTimeout(getTimeoutId);
+        }
+
+        if ((headStatus === 'error' || headStatus >= 400) && (getStatus === 'error' || getStatus >= 400)) {
+            // Both failed, create BUG note
+            console.log('Observatron: Link is broken, creating note');
+            const noteText = `! Broken link found on ${link.source} - ${link.url} - "${link.text}" - HEAD status: ${headStatus} - GET status: ${getStatus}`;
+            saveNoteFromMessage(noteText, false, false);
+        } else {
+            console.log('Observatron: Link is OK');
+        }
+    } catch (error) {
+        console.error('Observatron: Unexpected error checking link:', link.url, error);
+    }
+
+    // Save updated queue
+    chrome.storage.session.set({ brokenLinkQueue: queue });
+    console.log('Observatron: Saved updated queue, new length:', queue.length);
+
+    // Schedule next check after delay
+    console.log('Observatron: Scheduling next check in', options.reportBrokenLinksCheckDelayMs, 'ms');
+    setTimeout(processBrokenLinkQueue, options.reportBrokenLinksCheckDelayMs);
 }
 
 function logEvent(event) {

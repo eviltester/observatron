@@ -62,6 +62,15 @@ Options.prototype.setOnInputChanges = function(value){
 Options.prototype.setOnClickEvents = function(value){
     this.setBooleanPropertyIfValid("onClickEvents", value);
 };
+Options.prototype.setOnReportBrokenLinks = function(value){
+    this.setBooleanPropertyIfValid("reportBrokenLinks", value);
+};
+Options.prototype.setReportBrokenLinksTimeoutMs = function(value){
+    this.setNumericPropertyIfValid("reportBrokenLinksTimeoutMs", value);
+};
+Options.prototype.setReportBrokenLinksCheckDelayMs = function(value){
+    this.setNumericPropertyIfValid("reportBrokenLinksCheckDelayMs", value);
+};
 Options.prototype.setScrollingTimeoutMilliseconds = function(value){
     this.setNumericPropertyIfValid("scrolling_timeout_milliseconds", value);
 }
@@ -100,6 +109,9 @@ function getDefaultOptions() {
         onPageMutation: false,
         onInputChanges: true,
         onClickEvents: true,
+        reportBrokenLinks: false,
+        reportBrokenLinksTimeoutMs: 10000,
+        reportBrokenLinksCheckDelayMs: 1000,
         filepath: "observatron/",
         fileprefix: "obs_",
         sessionName: "",

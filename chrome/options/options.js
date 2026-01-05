@@ -86,6 +86,7 @@ function buildOptionsUI(containerId) {
         {id: 'onpostformsubmit', label: 'Log POST form contents to a file'},
         {id: 'onpageloaddetecthtmlcomments', label: 'On Page Load - Detect HTML Comments'},
         {id: 'onpageloadloghtmlcommentsasnotes', label: 'On Page Load - Log HTML Comments as Notes'},
+        {id: 'onreportbrokenlinks', label: 'On Page Load - Report Broken Links'},
         {id: 'onpagemutation', label: 'On Page Mutation'},
         {id: 'oninputchanges', label: 'Log Input Changes'},
         {id: 'onclickevents', label: 'Log Click Events'}
@@ -167,6 +168,24 @@ function buildOptionsUI(containerId) {
     container.appendChild(resizeLabel);
     container.appendChild(document.createElement('br'));
 
+    const brokenLinksTimeoutLabel = document.createElement('label');
+    const brokenLinksTimeoutInput = document.createElement('input');
+    brokenLinksTimeoutInput.type = 'number';
+    brokenLinksTimeoutInput.id = 'report_broken_links_timeout';
+    brokenLinksTimeoutLabel.appendChild(brokenLinksTimeoutInput);
+    brokenLinksTimeoutLabel.appendChild(document.createTextNode(' Broken Links Fetch Timeout Milliseconds:'));
+    container.appendChild(brokenLinksTimeoutLabel);
+    container.appendChild(document.createElement('br'));
+
+    const brokenLinksDelayLabel = document.createElement('label');
+    const brokenLinksDelayInput = document.createElement('input');
+    brokenLinksDelayInput.type = 'number';
+    brokenLinksDelayInput.id = 'report_broken_links_delay';
+    brokenLinksDelayLabel.appendChild(brokenLinksDelayInput);
+    brokenLinksDelayLabel.appendChild(document.createTextNode(' Broken Links Check Delay Milliseconds:'));
+    container.appendChild(brokenLinksDelayLabel);
+    container.appendChild(document.createElement('br'));
+
     // Save section
     const h2Save = document.createElement('h2');
     h2Save.textContent = 'Remember to save changes';
@@ -214,12 +233,15 @@ function save_options() {
     newOptions.setOnPostSubmit(document.getElementById('onpostformsubmit').checked);
     newOptions.setOnPageLoadDetectHtmlComments(document.getElementById('onpageloaddetecthtmlcomments').checked);
     newOptions.setOnPageLoadLogHtmlCommentsAsNotes(document.getElementById('onpageloadloghtmlcommentsasnotes').checked);
+    newOptions.setOnReportBrokenLinks(document.getElementById('onreportbrokenlinks').checked);
     newOptions.setOnPageMutation(document.getElementById('onpagemutation').checked);
     newOptions.setOnInputChanges(document.getElementById('oninputchanges').checked);
     newOptions.setOnClickEvents(document.getElementById('onclickevents').checked);
 
     newOptions.setScrollingTimeoutMilliseconds(document.getElementById('scrolling_timeout').value);
     newOptions.setResizeTimeoutMilliseconds(document.getElementById('resize_timeout').value);
+    newOptions.setReportBrokenLinksTimeoutMs(document.getElementById('report_broken_links_timeout').value);
+    newOptions.setReportBrokenLinksCheckDelayMs(document.getElementById('report_broken_links_delay').value);
 
     newOptions.setFilePath(document.getElementById('filepath').value);
     newOptions.setFilePrefix(document.getElementById('fileprefix').value);
@@ -290,17 +312,20 @@ function displayObservatronOptionsOnGUI(options){
    document.getElementById('onpageupdated').checked = options.onPageUpdated;
    document.getElementById('ondoubleclick').checked = options.onDoubleClickShot;
    document.getElementById('onpostformsubmit').checked = options.onPostSubmit;
-   document.getElementById('onpageloaddetecthtmlcomments').checked = options.onPageLoadDetectHtmlComments;
-   document.getElementById('onpageloadloghtmlcommentsasnotes').checked = options.onPageLoadLogHtmlCommentsAsNotes;
-   document.getElementById('onpagemutation').checked = options.onPageMutation;
-   document.getElementById('oninputchanges').checked = options.onInputChanges;
-   document.getElementById('onclickevents').checked = options.onClickEvents;
+    document.getElementById('onpageloaddetecthtmlcomments').checked = options.onPageLoadDetectHtmlComments;
+    document.getElementById('onpageloadloghtmlcommentsasnotes').checked = options.onPageLoadLogHtmlCommentsAsNotes;
+    document.getElementById('onreportbrokenlinks').checked = options.reportBrokenLinks;
+    document.getElementById('onpagemutation').checked = options.onPageMutation;
+    document.getElementById('oninputchanges').checked = options.onInputChanges;
+    document.getElementById('onclickevents').checked = options.onClickEvents;
     document.getElementById('filepath').value = options.filepath;
     document.getElementById('fileprefix').value = options.fileprefix;
     document.getElementById('sessionname').value = options.sessionName;
     document.getElementById('folderStructure').value = options.folderStructure;
-   document.getElementById('scrolling_timeout').value = options.scrolling_timeout_milliseconds;
-   document.getElementById('resize_timeout').value = options.resize_timeout_milliseconds;
+    document.getElementById('scrolling_timeout').value = options.scrolling_timeout_milliseconds;
+    document.getElementById('resize_timeout').value = options.resize_timeout_milliseconds;
+    document.getElementById('report_broken_links_timeout').value = options.reportBrokenLinksTimeoutMs;
+    document.getElementById('report_broken_links_delay').value = options.reportBrokenLinksCheckDelayMs;
   
   setHeadingOnPage();
 
