@@ -83,6 +83,28 @@ document.getElementById('saveComments').addEventListener('click', function() {
     });
 });
 
+document.getElementById('checkBrokenLinks').addEventListener('click', function() {
+    // Get checked hashes from storage
+    chrome.storage.session.get(['brokenLinkHashes'], function(result) {
+        const checkedHashes = result.brokenLinkHashes || [];
+        // Get the current tab and send message to content script
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            const currentTabId = tabs[0] ? tabs[0].id : null;
+            if (currentTabId) {
+                chrome.tabs.sendMessage(currentTabId, {method: 'scanBrokenLinks', checkedHashes: checkedHashes, manual: true}, function(response) {
+                    if (chrome.runtime.lastError) {
+                        if (!chrome.runtime.lastError.message.includes('message port closed')) {
+                            console.warn("Failed to scan broken links:", chrome.runtime.lastError.message);
+                        }
+                        return;
+                    }
+                    // No response expected
+                });
+            }
+        });
+    });
+});
+
 document.getElementById('takeElementScreenshot').addEventListener('click', function() {
     // Get the current tab ID for element screenshots
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {

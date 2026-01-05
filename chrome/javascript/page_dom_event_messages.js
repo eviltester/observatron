@@ -88,7 +88,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     }
 
     if (request.method === 'scanBrokenLinks') {
-       if (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain) return;
+       const isManual = request.manual || false;
+       if (!isManual && (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain)) return;
 
        const links = [];
        const anchors = document.querySelectorAll('a[href]');

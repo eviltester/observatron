@@ -144,29 +144,35 @@ function requestMethodHandler(request, sender, sendResponse){
     return true;
   }
 
-  // Handle saveNote regardless of engagement status
-  if (request.method === 'saveNote') {
-    saveNoteFromMessage(request.noteText, request.withScreenshot, request.withElementScreenshot);
-    if (request.withElementScreenshot) {
-      // Refresh element data first
-      chrome.runtime.sendMessage({type: 'updateElementData'});
-      setTimeout(() => {
-        // Get updated selected element data and take screenshot
-        chrome.storage.local.get(['selectedElement'], function(result) {
-          const element = result.selectedElement;
-          // Use the tab ID from the request (sent by sidepanel)
-          const tabId = request.tabId;
-          if (element && tabId) {
-            takeElementScreenshot(element.selector, element.rect, tabId);
-          } else if (!tabId) {
-            console.warn("No tab ID available for element screenshot");
-          }
-        });
-      }, 500);
-    }
-    sendResponse({success: true});
-    return true; // Keep the message channel open for async response
-  }
+   // Handle saveNote regardless of engagement status
+   if (request.method === 'saveNote') {
+     saveNoteFromMessage(request.noteText, request.withScreenshot, request.withElementScreenshot);
+     if (request.withElementScreenshot) {
+       // Refresh element data first
+       chrome.runtime.sendMessage({type: 'updateElementData'});
+       setTimeout(() => {
+         // Get updated selected element data and take screenshot
+         chrome.storage.local.get(['selectedElement'], function(result) {
+           const element = result.selectedElement;
+           // Use the tab ID from the request (sent by sidepanel)
+           const tabId = request.tabId;
+           if (element && tabId) {
+             takeElementScreenshot(element.selector, element.rect, tabId);
+           } else if (!tabId) {
+             console.warn("No tab ID available for element screenshot");
+           }
+         });
+       }, 500);
+     }
+     sendResponse({success: true});
+     return true; // Keep the message channel open for async response
+   }
+
+   // Handle brokenLinksFound regardless of engagement status
+   if (request.method === 'brokenLinksFound') {
+     handleBrokenLinks(request.links);
+     return false;
+   }
 
 
 
@@ -250,10 +256,7 @@ function requestMethodHandler(request, sender, sendResponse){
       return true;
     }
 
-    if (request.method === 'brokenLinksFound') {
-      handleBrokenLinks(request.links);
-      return false;
-    }
+
 
    return false;
 
@@ -652,7 +655,7 @@ async function processBrokenLinkQueue() {
         if ((headStatus === 'error' || headStatus >= 400) && (getStatus === 'error' || getStatus >= 400)) {
             // Both failed, create BUG note
             console.log('Observatron: Link is broken, creating note');
-            const noteText = `! Broken link found on ${link.source} - ${link.url} - "${link.text}" - HEAD status: ${headStatus} - GET status: ${getStatus}`;
+            const noteText = `! Broken link found on ${link.source}\n- ${link.url}\n- "${link.text}"\n- HEAD status: ${headStatus}\n- GET status: ${getStatus}`;
             saveNoteFromMessage(noteText, false, false);
         } else {
             console.log('Observatron: Link is OK');
