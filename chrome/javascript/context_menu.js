@@ -80,6 +80,7 @@ function ContextMenus(){
                 return;
             case "showSidePanel":
                 showSidePanel(tab.id, true);
+                chrome.sidePanel.open({ tabId: tab.id });
                 return;
         }
 

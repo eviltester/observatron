@@ -410,15 +410,7 @@ async function showSidePanel(tabId, shown){
       tabId: useTabId,
       path: 'sidepanel/sidepanel.html',
       enabled: shown
-      }, ()=> {
-            if(shown){
-                try{
-                    chrome.sidePanel.open({ tabId: tabId });
-                }catch(e){
-                    console.log("showSidePanel: " + e);
-                }
-            }
-        }
+      }
     );
 }
 
