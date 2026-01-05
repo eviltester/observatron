@@ -4,6 +4,9 @@ function buildOptionsUI(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
+    // Check if already built
+    if (container.querySelector('.event-logging-section')) return;
+
     // Clear existing content
     container.innerHTML = '';
 
@@ -70,42 +73,23 @@ function buildOptionsUI(containerId) {
         container.appendChild(document.createElement('br'));
     });
 
-    // Logging Configuration
-    const h2Logging = document.createElement('h2');
-    h2Logging.textContent = 'Logging Configuration';
-    container.appendChild(h2Logging);
-    const pLogging = document.createElement('p');
-    pLogging.textContent = 'Take screenshots, mhtml and json logs based on various events:';
-    container.appendChild(pLogging);
-
-    const loggingCheckboxes = [
-        {id: 'onpostformsubmit', label: 'Log POST form contents to a file'}
-    ];
-
-    // Event Logging sub-section
-    const h3EventLogging = document.createElement('h3');
-    h3EventLogging.textContent = 'Event Logging';
-    container.appendChild(h3EventLogging);
+    // Event Logging section
+    const h2EventLogging = document.createElement('h2');
+    h2EventLogging.textContent = 'Event Logging';
+    h2EventLogging.className = 'event-logging-section';
+    container.appendChild(h2EventLogging);
     const pEventLogging = document.createElement('p');
     pEventLogging.textContent = 'Log specific events without taking screenshots or saving MHTML:';
     container.appendChild(pEventLogging);
 
     const eventLoggingCheckboxes = [
+        {id: 'onpostformsubmit', label: 'Log POST form contents to a file'},
         {id: 'onpageloaddetecthtmlcomments', label: 'On Page Load - Detect HTML Comments'},
         {id: 'onpageloadloghtmlcommentsasnotes', label: 'On Page Load - Log HTML Comments as Notes'},
-        {id: 'onpagemutation', label: 'On Page Mutation'}
+        {id: 'onpagemutation', label: 'On Page Mutation'},
+        {id: 'oninputchanges', label: 'Log Input Changes'},
+        {id: 'onclickevents', label: 'Log Click Events'}
     ];
-    loggingCheckboxes.forEach(cb => {
-        const label = document.createElement('label');
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.id = cb.id;
-        label.appendChild(input);
-        label.appendChild(document.createTextNode(' ' + cb.label));
-        container.appendChild(label);
-        container.appendChild(document.createElement('br'));
-    });
-
     eventLoggingCheckboxes.forEach(cb => {
         const label = document.createElement('label');
         const input = document.createElement('input');
@@ -231,6 +215,8 @@ function save_options() {
     newOptions.setOnPageLoadDetectHtmlComments(document.getElementById('onpageloaddetecthtmlcomments').checked);
     newOptions.setOnPageLoadLogHtmlCommentsAsNotes(document.getElementById('onpageloadloghtmlcommentsasnotes').checked);
     newOptions.setOnPageMutation(document.getElementById('onpagemutation').checked);
+    newOptions.setOnInputChanges(document.getElementById('oninputchanges').checked);
+    newOptions.setOnClickEvents(document.getElementById('onclickevents').checked);
 
     newOptions.setScrollingTimeoutMilliseconds(document.getElementById('scrolling_timeout').value);
     newOptions.setResizeTimeoutMilliseconds(document.getElementById('resize_timeout').value);
@@ -307,6 +293,8 @@ function displayObservatronOptionsOnGUI(options){
    document.getElementById('onpageloaddetecthtmlcomments').checked = options.onPageLoadDetectHtmlComments;
    document.getElementById('onpageloadloghtmlcommentsasnotes').checked = options.onPageLoadLogHtmlCommentsAsNotes;
    document.getElementById('onpagemutation').checked = options.onPageMutation;
+   document.getElementById('oninputchanges').checked = options.onInputChanges;
+   document.getElementById('onclickevents').checked = options.onClickEvents;
     document.getElementById('filepath').value = options.filepath;
     document.getElementById('fileprefix').value = options.fileprefix;
     document.getElementById('sessionname').value = options.sessionName;

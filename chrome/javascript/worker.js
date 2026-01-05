@@ -115,7 +115,9 @@ function changedOptions(){
           method: 'observatronStatusChanged',
           engaged: options.engaged,
           domain: engagedDomain,
-          onPageMutation: options.onPageMutation
+          onPageMutation: options.onPageMutation,
+          onInputChanges: options.onInputChanges,
+          onClickEvents: options.onClickEvents
         }).catch(() => {
           // Ignore errors for tabs that don't have content scripts
         });
@@ -170,7 +172,7 @@ function requestMethodHandler(request, sender, sendResponse){
 
   // Handle status requests
   if (request.method === 'getStatus') {
-    sendResponse({engaged: options.engaged, domain: engagedDomain});
+    sendResponse({engaged: options.engaged, domain: engagedDomain, onClickEvents: options.onClickEvents, onInputChanges: options.onInputChanges, onPageMutation: options.onPageMutation});
     return true;
   }
 

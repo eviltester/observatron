@@ -56,6 +56,12 @@ Options.prototype.setOnPageLoadLogHtmlCommentsAsNotes = function(value){
 Options.prototype.setOnPageMutation = function(value){
     this.setBooleanPropertyIfValid("onPageMutation", value);
 };
+Options.prototype.setOnInputChanges = function(value){
+    this.setBooleanPropertyIfValid("onInputChanges", value);
+};
+Options.prototype.setOnClickEvents = function(value){
+    this.setBooleanPropertyIfValid("onClickEvents", value);
+};
 Options.prototype.setScrollingTimeoutMilliseconds = function(value){
     this.setNumericPropertyIfValid("scrolling_timeout_milliseconds", value);
 }
@@ -92,6 +98,8 @@ function getDefaultOptions() {
         onPageLoadDetectHtmlComments: false,
         onPageLoadLogHtmlCommentsAsNotes: false,
         onPageMutation: false,
+        onInputChanges: true,
+        onClickEvents: true,
         filepath: "observatron/",
         fileprefix: "obs_",
         sessionName: "",

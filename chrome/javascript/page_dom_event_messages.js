@@ -15,6 +15,8 @@ var dblClickTimeout = {timeout: 0, milliseconds: 0, message: {method: "screensho
 var isObservatronEngaged = false;
 var engagedDomain = null;
 var onPageMutation = false;
+var onInputChanges = true;
+var onClickEvents = true;
 var eventListenersActive = false;
 
 function simpleHash(str) {
@@ -36,12 +38,14 @@ var eventListeners = {
 
 // Listen for disconnection from background script
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-   if (request.method === 'observatronStatusChanged') {
-      isObservatronEngaged = request.engaged;
-      engagedDomain = request.domain;
-      onPageMutation = request.onPageMutation || false;
-      updateEventListeners();
-   }
+    if (request.method === 'observatronStatusChanged') {
+       isObservatronEngaged = request.engaged;
+       engagedDomain = request.domain;
+       onPageMutation = request.onPageMutation !== undefined ? request.onPageMutation : false;
+       onInputChanges = request.onInputChanges !== undefined ? request.onInputChanges : true;
+       onClickEvents = request.onClickEvents !== undefined ? request.onClickEvents : true;
+       updateEventListeners();
+    }
 
    if (request.method === 'scanHtmlComments') {
       if (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain) return;
@@ -103,15 +107,17 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
 // TODO: other options might also have changed should handle that too
 chrome.storage.onChanged.addListener(function(changes, namespace) {
-   if(namespace === "local"){
-     if(changes.hasOwnProperty("observatron")){
-       isObservatronEngaged = changes["observatron"].newValue.engaged;
-       onPageMutation = changes["observatron"].newValue.onPageMutation || false;
-       // Note: domain changes are sent via message, not storage
-       updateEventListeners();
-     }
-   }
-});
+    if(namespace === "local"){
+      if(changes.hasOwnProperty("observatron")){
+        isObservatronEngaged = changes["observatron"].newValue.engaged;
+        onPageMutation = changes["observatron"].newValue.onPageMutation || false;
+        onInputChanges = changes["observatron"].newValue.onInputChanges !== undefined ? changes["observatron"].newValue.onInputChanges : true;
+        onClickEvents = changes["observatron"].newValue.onClickEvents !== undefined ? changes["observatron"].newValue.onClickEvents : true;
+        // Note: domain changes are sent via message, not storage
+        // updateEventListeners(); // Removed to avoid double calls, since message is sent
+      }
+    }
+  });
 
 // Load initial engagement status
 chrome.storage.local.get(['observatron'], function(result) {
@@ -128,17 +134,20 @@ chrome.storage.local.get(['observatron'], function(result) {
 if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
   console.log("requesting current status");
   try {
-    chrome.runtime.sendMessage({method: 'getStatus'}, function(response) {
-      if (response) {
-        isObservatronEngaged = response.engaged;
-        engagedDomain = response.domain;
-        console.log("Status received from background:", {engaged: isObservatronEngaged, domain: engagedDomain});
-        updateEventListeners();
-      }
-      if (chrome.runtime.lastError) {
-        console.log("Error requesting status:", chrome.runtime.lastError.message);
-      }
-    });
+     chrome.runtime.sendMessage({method: 'getStatus'}, function(response) {
+       if (response) {
+         isObservatronEngaged = response.engaged;
+         engagedDomain = response.domain;
+         onClickEvents = response.onClickEvents !== undefined ? response.onClickEvents : true;
+         onInputChanges = response.onInputChanges !== undefined ? response.onInputChanges : true;
+         onPageMutation = response.onPageMutation !== undefined ? response.onPageMutation : false;
+         console.log("Status received from background:", {engaged: isObservatronEngaged, domain: engagedDomain, onClickEvents: onClickEvents, onInputChanges: onInputChanges, onPageMutation: onPageMutation});
+         updateEventListeners();
+       }
+       if (chrome.runtime.lastError) {
+         console.log("Error requesting status:", chrome.runtime.lastError.message);
+       }
+     });
   } catch (e) {
     console.log("Failed to request status:", e);
   }
@@ -169,6 +178,8 @@ function setObservatronDefaults(options){
 // Create event listener functions
 function createInputEventListener() {
   return function(e) {
+    if (!onInputChanges) return;
+
     const el = e.target;
 
     if (el instanceof HTMLInputElement ||
@@ -193,6 +204,8 @@ function createInputEventListener() {
 
 function createClickEventListener() {
   return function(e) {
+    if (!onClickEvents) return;
+
     const el = e.target;
 
     sendAMessage(
@@ -309,38 +322,28 @@ function updateEventListeners() {
 }
 
 function addEventListeners() {
-  // Create and store event listeners
-  eventListeners.input = createInputEventListener();
-  eventListeners.click = createClickEventListener();
-  eventListeners.resize = createResizeEventListener();
-  eventListeners.scroll = createScrollEventListener();
-  eventListeners.dblclick = createDblClickEventListener();
+   // Create and store event listeners
+   eventListeners.input = createInputEventListener();
+   eventListeners.click = createClickEventListener();
+   eventListeners.resize = createResizeEventListener();
+   eventListeners.scroll = createScrollEventListener();
+   eventListeners.dblclick = createDblClickEventListener();
 
-  // Add event listeners
-  window.addEventListener("input", eventListeners.input, true);
-  window.addEventListener("click", eventListeners.click, true);
-  window.addEventListener("resize", eventListeners.resize, false);
-  window.addEventListener("scroll", eventListeners.scroll, false);
-  window.addEventListener("dblclick", eventListeners.dblclick, false);
+   // Add event listeners
+   window.addEventListener("input", eventListeners.input, true);
+   window.addEventListener("click", eventListeners.click, true);
+   window.addEventListener("resize", eventListeners.resize, false);
+   window.addEventListener("scroll", eventListeners.scroll, false);
+   window.addEventListener("dblclick", eventListeners.dblclick, false);
 }
 
 function removeEventListeners() {
   // Remove event listeners
-  if (eventListeners.input) {
-    window.removeEventListener("input", eventListeners.input, true);
-  }
-  if (eventListeners.click) {
-    window.removeEventListener("click", eventListeners.click, true);
-  }
-  if (eventListeners.resize) {
-    window.removeEventListener("resize", eventListeners.resize, false);
-  }
-  if (eventListeners.scroll) {
-    window.removeEventListener("scroll", eventListeners.scroll, false);
-  }
-  if (eventListeners.dblclick) {
-    window.removeEventListener("dblclick", eventListeners.dblclick, false);
-  }
+  window.removeEventListener("input", eventListeners.input, true);
+  window.removeEventListener("click", eventListeners.click, true);
+  window.removeEventListener("resize", eventListeners.resize, false);
+  window.removeEventListener("scroll", eventListeners.scroll, false);
+  window.removeEventListener("dblclick", eventListeners.dblclick, false);
 
   // Clear references
   eventListeners.input = null;
