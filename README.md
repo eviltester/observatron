@@ -255,8 +255,9 @@ show notes in side-bar
    - migrated html comment detection from Test Tool Hub
    - added more options to configure event checking
    - removed option setting from popup - need to use the options views now
-   - background and manual trigger broken link check
+   - background and manual trigger broken link check - based on link check in test tool hub
    - background and manual trigger broken image check
+   - status rendering of background info - monitored domain (in image alt), and link and image checking queue length
 - 1.0
   - added tests and build process
   - tidied logging
