@@ -82,6 +82,23 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
          url: window.location.href
       });
    }
+
+   if (request.method === 'scanCommentsForSave') {
+      if (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain) return;
+
+      const comments = [];
+      const walker = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
+      let node;
+      while ((node = walker.nextNode()) !== null) {
+         const text = node.textContent.trim();
+         if (text) {
+            comments.push(text);
+         }
+      }
+
+      // Send response with all comments and URL
+      sendResponse({comments: comments, url: window.location.href});
+   }
 });
 
 // TODO: other options might also have changed should handle that too
