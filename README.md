@@ -253,6 +253,8 @@ show notes in side-bar
 
 - 1.0.1
    - migrated html comment detection from Test Tool Hub
+   - added more options to configure event checking
+   - removed option setting from popup - need to use the options views now
 - 1.0
   - added tests and build process
   - tidied logging
