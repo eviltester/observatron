@@ -105,6 +105,28 @@ document.getElementById('checkBrokenLinks').addEventListener('click', function()
     });
 });
 
+document.getElementById('checkBrokenImages').addEventListener('click', function() {
+    // Get checked hashes from storage
+    chrome.storage.session.get(['brokenImageHashes'], function(result) {
+        const checkedHashes = result.brokenImageHashes || [];
+        // Get the current tab and send message to content script
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            const currentTabId = tabs[0] ? tabs[0].id : null;
+            if (currentTabId) {
+                chrome.tabs.sendMessage(currentTabId, {method: 'scanBrokenImages', checkedHashes: checkedHashes, manual: true}, function(response) {
+                    if (chrome.runtime.lastError) {
+                        if (!chrome.runtime.lastError.message.includes('message port closed')) {
+                            console.warn("Failed to scan broken images:", chrome.runtime.lastError.message);
+                        }
+                        return;
+                    }
+                    // No response expected
+                });
+            }
+        });
+    });
+});
+
 document.getElementById('takeElementScreenshot').addEventListener('click', function() {
     // Get the current tab ID for element screenshots
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {

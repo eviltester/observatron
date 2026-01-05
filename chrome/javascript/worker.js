@@ -174,6 +174,12 @@ function requestMethodHandler(request, sender, sendResponse){
      return false;
    }
 
+   // Handle brokenImagesFound regardless of engagement status
+   if (request.method === 'brokenImagesFound') {
+     handleBrokenAssets(request.images, 'Image');
+     return false;
+   }
+
 
 
   // Handle status requests
@@ -293,6 +299,8 @@ function toggle_observatron_status(tab){
        // Clear broken link queue and hashes
        console.log('Observatron: Clearing broken link queue and hashes on disengage');
        chrome.storage.session.set({brokenLinkQueue: [], brokenLinkHashes: []});
+       // Clear broken image queue and hashes
+       chrome.storage.session.set({brokenImageQueue: [], brokenImageHashes: []});
 
       changedOptions();
 
@@ -310,6 +318,8 @@ function toggle_observatron_status(tab){
        // Clear broken link queue and hashes for new session
        console.log('Observatron: Clearing broken link queue and hashes for new session');
        chrome.storage.session.set({brokenLinkQueue: [], brokenLinkHashes: []});
+       // Clear broken image queue and hashes for new session
+       chrome.storage.session.set({brokenImageQueue: [], brokenImageHashes: []});
 
       // Record the current domain
       chrome.tabs.query({ currentWindow: true, active: true }, function(tabs) {
@@ -412,6 +422,16 @@ function configuredOnPageLoad(anObject){
               const checkedHashes = result.brokenLinkHashes || [];
               chrome.tabs.sendMessage(anObject.tabId, {
                 method: 'scanBrokenLinks',
+                checkedHashes: checkedHashes
+              });
+            });
+          }
+
+          if (options.reportBrokenImages) {
+            chrome.storage.session.get(['brokenImageHashes'], function(result) {
+              const checkedHashes = result.brokenImageHashes || [];
+              chrome.tabs.sendMessage(anObject.tabId, {
+                method: 'scanBrokenImages',
                 checkedHashes: checkedHashes
               });
             });
@@ -546,6 +566,128 @@ function simpleHash(str) {
    return hash;
 }
 
+// Shared functions for broken assets (links/images)
+async function checkAsset(url, timeoutMs) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    let headResponse = null;
+    let headStatus = null;
+    try {
+        console.log('Observatron: Sending HEAD request to:', url);
+        headResponse = await fetch(url, { method: 'HEAD', signal: controller.signal });
+        headStatus = headResponse.status;
+        console.log('Observatron: HEAD response status:', headStatus);
+        if (headResponse.redirected) {
+            console.log('Observatron: Redirect detected:', url, '->', headResponse.url);
+        }
+    } catch (error) {
+        headStatus = 'error';
+        console.log('Observatron: HEAD request failed:', error.message);
+    }
+    clearTimeout(timeoutId);
+
+    let getStatus = null;
+    if (headStatus === 'error' || headStatus >= 400) {
+        // Try GET
+        const getController = new AbortController();
+        const getTimeoutId = setTimeout(() => getController.abort(), timeoutMs);
+        try {
+            console.log('Observatron: Sending GET request to:', url);
+            const getResponse = await fetch(url, { method: 'GET', signal: getController.signal });
+            getStatus = getResponse.status;
+            console.log('Observatron: GET response status:', getStatus);
+            if (getResponse.redirected) {
+                console.log('Observatron: Redirect detected:', url, '->', getResponse.url);
+            }
+        } catch (error) {
+            getStatus = 'error';
+            console.log('Observatron: GET request failed:', error.message);
+        }
+        clearTimeout(getTimeoutId);
+    }
+
+    return { headStatus, getStatus };
+}
+
+function createBrokenAssetNote(assetType, source, url, text, headStatus, getStatus) {
+    console.log('Observatron: Asset is broken, creating note');
+    const assetName = assetType === 'image' ? 'image' : 'link';
+    const noteText = `! Broken ${assetName} found on ${source}\n- ${url}\n- "${text}"\n- HEAD status: ${headStatus}\n- GET status: ${getStatus}`;
+    saveNoteFromMessage(noteText, false, false);
+}
+
+async function handleBrokenAssets(assets, assetType) {
+    console.log('Observatron: Handling broken', assetType + 's, received count:', assets.length);
+    const queueKey = `broken${assetType}Queue`;
+    const hashesKey = `broken${assetType}Hashes`;
+
+    // Load existing queue and checked hashes
+    const result = await chrome.storage.session.get([queueKey, hashesKey]);
+    let queue = result[queueKey] || [];
+    const checkedHashes = new Set(result[hashesKey] || []);
+
+    console.log('Observatron: Existing queue length:', queue.length, 'checked hashes:', checkedHashes.size);
+
+    // Add new assets to queue if not already checked
+    let added = 0;
+    for (const asset of assets) {
+        if (!checkedHashes.has(asset.hash)) {
+            queue.push(asset);
+            checkedHashes.add(asset.hash);
+            added++;
+        }
+    }
+
+    console.log('Observatron: Added', added, 'new', assetType + 's to queue. New queue length:', queue.length);
+
+    // Save updated queue and hashes
+    const update = {};
+    update[queueKey] = queue;
+    update[hashesKey] = Array.from(checkedHashes);
+    chrome.storage.session.set(update);
+
+    // Start processing if not already running
+    processBrokenAssetQueue(assetType);
+}
+
+async function processBrokenAssetQueue(assetType) {
+    const queueKey = `broken${assetType}Queue`;
+    const timeoutKey = `reportBroken${assetType}sTimeoutMs`;
+    const delayKey = `reportBroken${assetType}sCheckDelayMs`;
+
+    const result = await chrome.storage.session.get([queueKey]);
+    let queue = result[queueKey] || [];
+
+    console.log('Observatron: Processing broken', assetType, 'queue, current length:', queue.length);
+
+    if (queue.length === 0) {
+        console.log('Observatron: Queue empty, stopping processing');
+        return;
+    }
+
+    const asset = queue.shift(); // Process first item
+    console.log('Observatron: Processing', assetType + ':', asset.url, 'from', asset.source);
+
+    const { headStatus, getStatus } = await checkAsset(asset.url, options[timeoutKey]);
+
+    if ((headStatus === 'error' || headStatus >= 400) && (getStatus === 'error' || getStatus >= 400)) {
+        createBrokenAssetNote(assetType, asset.source, asset.url, asset.text, headStatus, getStatus);
+    } else {
+        console.log('Observatron: Asset is OK');
+    }
+
+    // Save updated queue
+    const update = {};
+    update[queueKey] = queue;
+    chrome.storage.session.set(update);
+    console.log('Observatron: Saved updated queue, new length:', queue.length);
+
+    // Schedule next check after delay
+    console.log('Observatron: Scheduling next check in', options[delayKey], 'ms');
+    setTimeout(() => processBrokenAssetQueue(assetType), options[delayKey]);
+}
+
 async function handleHtmlComments(comments, url) {
     // Load existing seen hashes
     const result = await chrome.storage.session.get(['htmlCommentHashes']);
@@ -568,110 +710,10 @@ async function handleHtmlComments(comments, url) {
 }
 
 async function handleBrokenLinks(links) {
-    console.log('Observatron: Handling broken links, received count:', links.length);
-    // Load existing queue and checked hashes
-    const result = await chrome.storage.session.get(['brokenLinkQueue', 'brokenLinkHashes']);
-    let queue = result.brokenLinkQueue || [];
-    const checkedHashes = new Set(result.brokenLinkHashes || []);
-
-    console.log('Observatron: Existing queue length:', queue.length, 'checked hashes:', checkedHashes.size);
-
-    // Add new links to queue if not already checked
-    let added = 0;
-    for (const link of links) {
-        if (!checkedHashes.has(link.hash)) {
-            queue.push(link);
-            checkedHashes.add(link.hash);
-            added++;
-        }
-    }
-
-    console.log('Observatron: Added', added, 'new links to queue. New queue length:', queue.length);
-
-    // Save updated queue and hashes
-    chrome.storage.session.set({
-        brokenLinkQueue: queue,
-        brokenLinkHashes: Array.from(checkedHashes)
-    });
-
-    // Start processing if not already running
-    processBrokenLinkQueue();
+    await handleBrokenAssets(links, 'Link');
 }
 
-async function processBrokenLinkQueue() {
-    const result = await chrome.storage.session.get(['brokenLinkQueue']);
-    let queue = result.brokenLinkQueue || [];
 
-    console.log('Observatron: Processing broken link queue, current length:', queue.length);
-
-    if (queue.length === 0) {
-        console.log('Observatron: Queue empty, stopping processing');
-        return;
-    }
-
-    const link = queue.shift(); // Process first item
-    console.log('Observatron: Processing link:', link.url, 'from', link.source);
-
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), options.reportBrokenLinksTimeoutMs);
-
-        let headResponse = null;
-        let headStatus = null;
-        try {
-            console.log('Observatron: Sending HEAD request to:', link.url);
-            headResponse = await fetch(link.url, { method: 'HEAD', signal: controller.signal });
-            headStatus = headResponse.status;
-            console.log('Observatron: HEAD response status:', headStatus);
-            if (headResponse.redirected) {
-                console.log('Observatron: Redirect detected:', link.url, '->', headResponse.url);
-            }
-        } catch (error) {
-            headStatus = 'error';
-            console.log('Observatron: HEAD request failed:', error.message);
-        }
-        clearTimeout(timeoutId);
-
-        let getStatus = null;
-        if (headStatus === 'error' || headStatus >= 400) {
-            // Try GET
-            const getController = new AbortController();
-            const getTimeoutId = setTimeout(() => getController.abort(), options.reportBrokenLinksTimeoutMs);
-            try {
-                console.log('Observatron: Sending GET request to:', link.url);
-                const getResponse = await fetch(link.url, { method: 'GET', signal: getController.signal });
-                getStatus = getResponse.status;
-                console.log('Observatron: GET response status:', getStatus);
-                if (getResponse.redirected) {
-                    console.log('Observatron: Redirect detected:', link.url, '->', getResponse.url);
-                }
-            } catch (error) {
-                getStatus = 'error';
-                console.log('Observatron: GET request failed:', error.message);
-            }
-            clearTimeout(getTimeoutId);
-        }
-
-        if ((headStatus === 'error' || headStatus >= 400) && (getStatus === 'error' || getStatus >= 400)) {
-            // Both failed, create BUG note
-            console.log('Observatron: Link is broken, creating note');
-            const noteText = `! Broken link found on ${link.source}\n- ${link.url}\n- "${link.text}"\n- HEAD status: ${headStatus}\n- GET status: ${getStatus}`;
-            saveNoteFromMessage(noteText, false, false);
-        } else {
-            console.log('Observatron: Link is OK');
-        }
-    } catch (error) {
-        console.error('Observatron: Unexpected error checking link:', link.url, error);
-    }
-
-    // Save updated queue
-    chrome.storage.session.set({ brokenLinkQueue: queue });
-    console.log('Observatron: Saved updated queue, new length:', queue.length);
-
-    // Schedule next check after delay
-    console.log('Observatron: Scheduling next check in', options.reportBrokenLinksCheckDelayMs, 'ms');
-    setTimeout(processBrokenLinkQueue, options.reportBrokenLinksCheckDelayMs);
-}
 
 function logEvent(event) {
   var eventId = Math.floor(Date.now());

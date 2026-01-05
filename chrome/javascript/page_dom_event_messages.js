@@ -120,13 +120,56 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
        }
 
        if (links.length > 0) {
-          console.log('Observatron: Sending', links.length, 'broken links to check');
+          console.log('Observatron: Sending', links.length, 'links to check for broken');
           chrome.runtime.sendMessage({
              method: 'brokenLinksFound',
              links: links
           });
        } else {
-          console.log('Observatron: No new broken links to check');
+          console.log('Observatron: No new links to check for broken');
+       }
+    }
+
+    if (request.method === 'scanBrokenImages') {
+       const isManual = request.manual || false;
+       if (!isManual && (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain)) return;
+
+       const images = [];
+       const imgs = document.querySelectorAll('img[src]');
+       const checkedHashes = new Set(request.checkedHashes || []);
+
+       for (const el of imgs) {
+          const src = el.src;
+          if (!src) continue;
+
+          let url;
+          try {
+             url = new URL(src, window.location.href).href;
+          } catch (e) {
+             continue; // Invalid URL
+          }
+
+          // Skip non-HTTP/HTTPS
+          if (!url.startsWith('http://') && !url.startsWith('https://')) continue;
+
+          const hash = simpleHash(url);
+          if (!checkedHashes.has(hash)) {
+             let alt = el.alt || '[no alt]';
+             if (alt.length > 100) {
+                alt = alt.substring(0, 100) + '...';
+             }
+             images.push({ url, source: window.location.href, hash, text: alt });
+          }
+       }
+
+       if (images.length > 0) {
+          console.log('Observatron: Sending', images.length, ' images to check for broken');
+          chrome.runtime.sendMessage({
+             method: 'brokenImagesFound',
+             images: images
+          });
+       } else {
+          console.log('Observatron: No new images to check for broken');
        }
    }
 

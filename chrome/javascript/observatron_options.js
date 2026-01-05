@@ -71,6 +71,15 @@ Options.prototype.setReportBrokenLinksTimeoutMs = function(value){
 Options.prototype.setReportBrokenLinksCheckDelayMs = function(value){
     this.setNumericPropertyIfValid("reportBrokenLinksCheckDelayMs", value);
 };
+Options.prototype.setOnReportBrokenImages = function(value){
+    this.setBooleanPropertyIfValid("reportBrokenImages", value);
+};
+Options.prototype.setReportBrokenImagesTimeoutMs = function(value){
+    this.setNumericPropertyIfValid("reportBrokenImagesTimeoutMs", value);
+};
+Options.prototype.setReportBrokenImagesCheckDelayMs = function(value){
+    this.setNumericPropertyIfValid("reportBrokenImagesCheckDelayMs", value);
+};
 Options.prototype.setScrollingTimeoutMilliseconds = function(value){
     this.setNumericPropertyIfValid("scrolling_timeout_milliseconds", value);
 }
@@ -112,6 +121,9 @@ function getDefaultOptions() {
         reportBrokenLinks: false,
         reportBrokenLinksTimeoutMs: 10000,
         reportBrokenLinksCheckDelayMs: 1000,
+        reportBrokenImages: false,
+        reportBrokenImagesTimeoutMs: 10000,
+        reportBrokenImagesCheckDelayMs: 1000,
         filepath: "observatron/",
         fileprefix: "obs_",
         sessionName: "",

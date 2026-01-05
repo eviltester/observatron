@@ -87,6 +87,7 @@ function buildOptionsUI(containerId) {
         {id: 'onpageloaddetecthtmlcomments', label: 'On Page Load - Detect HTML Comments'},
         {id: 'onpageloadloghtmlcommentsasnotes', label: 'On Page Load - Log HTML Comments as Notes'},
         {id: 'onreportbrokenlinks', label: 'On Page Load - Report Broken Links'},
+        {id: 'onreportbrokenimages', label: 'On Page Load - Report Broken Images'},
         {id: 'onpagemutation', label: 'On Page Mutation'},
         {id: 'oninputchanges', label: 'Log Input Changes'},
         {id: 'onclickevents', label: 'Log Click Events'}
@@ -186,6 +187,24 @@ function buildOptionsUI(containerId) {
     container.appendChild(brokenLinksDelayLabel);
     container.appendChild(document.createElement('br'));
 
+    const brokenImagesTimeoutLabel = document.createElement('label');
+    const brokenImagesTimeoutInput = document.createElement('input');
+    brokenImagesTimeoutInput.type = 'number';
+    brokenImagesTimeoutInput.id = 'report_broken_images_timeout';
+    brokenImagesTimeoutLabel.appendChild(brokenImagesTimeoutInput);
+    brokenImagesTimeoutLabel.appendChild(document.createTextNode(' Broken Images Fetch Timeout Milliseconds:'));
+    container.appendChild(brokenImagesTimeoutLabel);
+    container.appendChild(document.createElement('br'));
+
+    const brokenImagesDelayLabel = document.createElement('label');
+    const brokenImagesDelayInput = document.createElement('input');
+    brokenImagesDelayInput.type = 'number';
+    brokenImagesDelayInput.id = 'report_broken_images_delay';
+    brokenImagesDelayLabel.appendChild(brokenImagesDelayInput);
+    brokenImagesDelayLabel.appendChild(document.createTextNode(' Broken Images Check Delay Milliseconds:'));
+    container.appendChild(brokenImagesDelayLabel);
+    container.appendChild(document.createElement('br'));
+
     // Save section
     const h2Save = document.createElement('h2');
     h2Save.textContent = 'Remember to save changes';
@@ -234,6 +253,7 @@ function save_options() {
     newOptions.setOnPageLoadDetectHtmlComments(document.getElementById('onpageloaddetecthtmlcomments').checked);
     newOptions.setOnPageLoadLogHtmlCommentsAsNotes(document.getElementById('onpageloadloghtmlcommentsasnotes').checked);
     newOptions.setOnReportBrokenLinks(document.getElementById('onreportbrokenlinks').checked);
+    newOptions.setOnReportBrokenImages(document.getElementById('onreportbrokenimages').checked);
     newOptions.setOnPageMutation(document.getElementById('onpagemutation').checked);
     newOptions.setOnInputChanges(document.getElementById('oninputchanges').checked);
     newOptions.setOnClickEvents(document.getElementById('onclickevents').checked);
@@ -242,6 +262,8 @@ function save_options() {
     newOptions.setResizeTimeoutMilliseconds(document.getElementById('resize_timeout').value);
     newOptions.setReportBrokenLinksTimeoutMs(document.getElementById('report_broken_links_timeout').value);
     newOptions.setReportBrokenLinksCheckDelayMs(document.getElementById('report_broken_links_delay').value);
+    newOptions.setReportBrokenImagesTimeoutMs(document.getElementById('report_broken_images_timeout').value);
+    newOptions.setReportBrokenImagesCheckDelayMs(document.getElementById('report_broken_images_delay').value);
 
     newOptions.setFilePath(document.getElementById('filepath').value);
     newOptions.setFilePrefix(document.getElementById('fileprefix').value);
@@ -315,6 +337,7 @@ function displayObservatronOptionsOnGUI(options){
     document.getElementById('onpageloaddetecthtmlcomments').checked = options.onPageLoadDetectHtmlComments;
     document.getElementById('onpageloadloghtmlcommentsasnotes').checked = options.onPageLoadLogHtmlCommentsAsNotes;
     document.getElementById('onreportbrokenlinks').checked = options.reportBrokenLinks;
+    document.getElementById('onreportbrokenimages').checked = options.reportBrokenImages;
     document.getElementById('onpagemutation').checked = options.onPageMutation;
     document.getElementById('oninputchanges').checked = options.onInputChanges;
     document.getElementById('onclickevents').checked = options.onClickEvents;
@@ -326,6 +349,8 @@ function displayObservatronOptionsOnGUI(options){
     document.getElementById('resize_timeout').value = options.resize_timeout_milliseconds;
     document.getElementById('report_broken_links_timeout').value = options.reportBrokenLinksTimeoutMs;
     document.getElementById('report_broken_links_delay').value = options.reportBrokenLinksCheckDelayMs;
+    document.getElementById('report_broken_images_timeout').value = options.reportBrokenImagesTimeoutMs;
+    document.getElementById('report_broken_images_delay').value = options.reportBrokenImagesCheckDelayMs;
   
   setHeadingOnPage();
 
