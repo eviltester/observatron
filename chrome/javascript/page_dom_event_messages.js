@@ -87,10 +87,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       });
    }
 
-   if (request.method === 'scanCommentsForSave') {
-      if (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain) return;
-
-      const comments = [];
+    if (request.method === 'scanCommentsForSave') {
+       const comments = [];
       const walker = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
       let node;
       while ((node = walker.nextNode()) !== null) {

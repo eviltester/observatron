@@ -5,10 +5,11 @@ function ContextMenus(){
     contextMenus = {};
     contextTypes = ["all", "page", "browser_action"];
 
-    this.init = function(downloadScreenshotFunction, saveAsMhtmlFunction, options){
+    this.init = function(downloadScreenshotFunction, saveAsMhtmlFunction, saveCommentsFunction, options){
         this.saveAsMhtml = saveAsMhtmlFunction;
         this.options = options;
         this.downloadScreenshot = downloadScreenshotFunction;
+        this.saveComments = saveCommentsFunction;
     }
 
     function createSeparator(id){
@@ -43,6 +44,7 @@ function ContextMenus(){
                 contextMenus.takeScreenshotNow = createMenu("takeScreenshotNow", "Take Screenshot Now");
                 contextMenus.saveAsMhtmlNow = createMenu("saveAsMhtmlNow", "Save as MHTML Now");
                 contextMenus.logNote = createMenu("logNote", "Take Note");
+                contextMenus.saveComments = createMenu("saveComments", "Save Comments");
                 contextMenus.showSidePanel = createMenu("showSidePanel", "Show Side Panel");
 
                 contextMenus.line2 = createSeparator("separator2");
@@ -72,6 +74,9 @@ function ContextMenus(){
                 return;
             case "logNote":
                 logANote();
+                return;
+            case "saveComments":
+                saveComments();
                 return;
             case "showSidePanel":
                 showSidePanel(tab.id, true);
