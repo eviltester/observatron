@@ -91,7 +91,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
        const isManual = request.manual || false;
        if (!isManual && (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain)) return;
 
-       const links = [];
+        let links = [];
        const anchors = document.querySelectorAll('a[href]');
        const checkedHashes = new Set(request.checkedHashes || []);
 
@@ -119,22 +119,22 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           }
        }
 
-       if (links.length > 0) {
-          console.log('Observatron: Sending', links.length, 'links to check for broken');
-          chrome.runtime.sendMessage({
-             method: 'brokenLinksFound',
-             links: links
-          });
-       } else {
-          console.log('Observatron: No new links to check for broken');
-       }
+        if (links.length > 0) {
+           console.log('Observatron: Sending', links.length, 'links to check for broken');
+           chrome.runtime.sendMessage({
+              method: 'brokenLinksFound',
+              links: links
+           });
+        } else {
+           console.log('Observatron: No new links to check for broken');
+        }
     }
 
     if (request.method === 'scanBrokenImages') {
        const isManual = request.manual || false;
        if (!isManual && (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain)) return;
 
-       const images = [];
+        let images = [];
        const imgs = document.querySelectorAll('img[src]');
        const checkedHashes = new Set(request.checkedHashes || []);
 
@@ -162,15 +162,15 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           }
        }
 
-       if (images.length > 0) {
-          console.log('Observatron: Sending', images.length, ' images to check for broken');
-          chrome.runtime.sendMessage({
-             method: 'brokenImagesFound',
-             images: images
-          });
-       } else {
-          console.log('Observatron: No new images to check for broken');
-       }
+        if (images.length > 0) {
+           console.log('Observatron: Sending', images.length, ' images to check for broken');
+           chrome.runtime.sendMessage({
+              method: 'brokenImagesFound',
+              images: images
+           });
+        } else {
+           console.log('Observatron: No new images to check for broken');
+        }
    }
 
     if (request.method === 'scanCommentsForSave') {
