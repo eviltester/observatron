@@ -63,6 +63,70 @@ document.getElementById('savePage').addEventListener('click', function() {
     });
 });
 
+document.getElementById('saveComments').addEventListener('click', function() {
+    // Get the current tab and send message to content script
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        const currentTabId = tabs[0] ? tabs[0].id : null;
+        if (currentTabId) {
+            chrome.tabs.sendMessage(currentTabId, {method: 'scanCommentsForSave'}, function(response) {
+                if (chrome.runtime.lastError) {
+                    if (!chrome.runtime.lastError.message.includes('message port closed')) {
+                        console.warn("Failed to scan comments:", chrome.runtime.lastError.message);
+                    }
+                    return;
+                }
+                if (response && response.comments) {
+                    saveCommentsAsMarkdown(response.comments, response.url);
+                }
+            });
+        }
+    });
+});
+
+document.getElementById('checkBrokenLinks').addEventListener('click', function() {
+    // Get checked hashes from storage
+    chrome.storage.session.get(['brokenLinkHashes'], function(result) {
+        const checkedHashes = result.brokenLinkHashes || [];
+        // Get the current tab and send message to content script
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            const currentTabId = tabs[0] ? tabs[0].id : null;
+            if (currentTabId) {
+                chrome.tabs.sendMessage(currentTabId, {method: 'scanBrokenLinks', checkedHashes: checkedHashes, manual: true}, function(response) {
+                    if (chrome.runtime.lastError) {
+                        if (!chrome.runtime.lastError.message.includes('message port closed')) {
+                            console.warn("Failed to scan broken links:", chrome.runtime.lastError.message);
+                        }
+                        return;
+                    }
+                    // No response expected
+                });
+            }
+        });
+    });
+});
+
+document.getElementById('checkBrokenImages').addEventListener('click', function() {
+    // Get checked hashes from storage
+    chrome.storage.session.get(['brokenImageHashes'], function(result) {
+        const checkedHashes = result.brokenImageHashes || [];
+        // Get the current tab and send message to content script
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            const currentTabId = tabs[0] ? tabs[0].id : null;
+            if (currentTabId) {
+                chrome.tabs.sendMessage(currentTabId, {method: 'scanBrokenImages', checkedHashes: checkedHashes, manual: true}, function(response) {
+                    if (chrome.runtime.lastError) {
+                        if (!chrome.runtime.lastError.message.includes('message port closed')) {
+                            console.warn("Failed to scan broken images:", chrome.runtime.lastError.message);
+                        }
+                        return;
+                    }
+                    // No response expected
+                });
+            }
+        });
+    });
+});
+
 document.getElementById('takeElementScreenshot').addEventListener('click', function() {
     // Get the current tab ID for element screenshots
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -322,7 +386,8 @@ function renderNotes(notes) {
 
         const textSpan = document.createElement('span');
         const { truncated, isTruncated } = truncateNoteText(note.text);
-        textSpan.innerHTML = truncated.replace(/\n/g, '<br>');
+        textSpan.style.whiteSpace = 'pre-wrap';
+        textSpan.textContent = truncated;
         textSpan.setAttribute('data-full-text', note.text);
         textSpan.setAttribute('data-truncated', isTruncated ? 'true' : 'false');
         textSpan.setAttribute('data-expanded', 'false');
@@ -508,12 +573,12 @@ function toggleNoteExpansion(noteId) {
     if (isExpanded) {
         // Collapse
         const { truncated } = truncateNoteText(fullText);
-        textSpan.innerHTML = truncated.replace(/\n/g, '<br>');
+        textSpan.textContent = truncated;
         expandButton.textContent = 'Show More';
         textSpan.setAttribute('data-expanded', 'false');
     } else {
         // Expand
-        textSpan.innerHTML = fullText.replace(/\n/g, '<br>');
+        textSpan.textContent = fullText;
         expandButton.textContent = 'Show Less';
         textSpan.setAttribute('data-expanded', 'true');
     }
@@ -535,10 +600,22 @@ chrome.storage.onChanged.addListener(function(changes, namespace) {
     }
 });
 
+// Background processes status
+function updateQueueStatus() {
+    chrome.storage.session.get(['brokenLinkQueue', 'brokenImageQueue'], function(result) {
+        const linkQueue = result.brokenLinkQueue || [];
+        const imageQueue = result.brokenImageQueue || [];
+        document.getElementById('linkQueueLength').textContent = linkQueue.length;
+        document.getElementById('imageQueueLength').textContent = imageQueue.length;
+    });
+}
+
 // Load notes on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadNotes();
     loadSessionName();
+    updateQueueStatus(); // Initial update
+    setInterval(updateQueueStatus, 2000); // Update every 2 seconds
     document.getElementById('saveNotes').addEventListener('click', saveNotesAs);
     document.getElementById('loadNotes').addEventListener('click', () => {
         document.getElementById('notesFileInput').click();
@@ -624,6 +701,8 @@ function clearNotes() {
         });
     }
 }
+
+
 
 function saveNotesAs() {
     const format = document.getElementById('exportFormat').value;

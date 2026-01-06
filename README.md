@@ -238,19 +238,49 @@ show notes in side-bar
     - make flatten option the default
 - limit the custom note type name length (15 chars)
 - @custom[] (would allow opening and closing because it is a custom with a state - state == [])
+- check for broken links in parallel to the user testing
+- check for broken images in parallel to the user testing
+- manual check for links or images is also done in parallel with user testing
 
 ### TODO:
 
 - configurable data sizes (mutation text, clicked target text)
 - resize log with screensize change, not just screenshot
+- separate page load event i.e. track without saving screen details
 - mouse events - move
-- scan page for broken links when a page is opened (store what url was scanned and only scan once).
 - configurable auto save notes to file every (X minutes, after every note, config)
+- possible custom user scripts before/after events - or just use TamperMonkey for that?
+- report on the links that were checked during the session - list of URLS and their status - to show coverage
+- check for links and images on mutation, not just page load, and scan if available (use manual scan for the moment)
+- improve automated execution and condition coverage during build#
+- allow saving a filtered list of notes e.g. all open items or any filter to a text, json file or clipboard e.g. easy end of session open tasks and bugs tracking
+- when checking a link, if an error occurs, all the user sees is 'error' with no indication of what happened - improve this
+- for broken links - perhaps add a 'check again' button?
+- improve saving comments when no comments
 
+when saving comments manually from sidebar or extension and there are no comments,
+then no visible indication of no comments is provided so user might think the save doesn't work
+suggest - add a console log, or write an empty file, or add notification on screen
+
+### Build and Deploy
+
+- update manifest version
+- update package.json version
+- `npm run build`
+- upload to dashboard
+   - https://chrome.google.com/webstore/developer/dashboard
+  
 ---
 
 # Versions
 
+- 1.0.1
+   - migrated html comment detection from Test Tool Hub
+   - added more options to configure event checking
+   - removed option setting from popup - need to use the options views now
+   - background and manual trigger broken link check - based on link check in test tool hub
+   - background and manual trigger broken image check
+   - status rendering of background info - monitored domain (in image alt), and link and image checking queue length
 - 1.0
   - added tests and build process
   - tidied logging

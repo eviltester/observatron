@@ -1,17 +1,18 @@
 // TODO: when update options, refresh code in each current tab
 // https://stackoverflow.com/questions/10994324/chrome-extension-content-script-re-injection-after-upgrade-or-install/11598753#11598753
 
- // Import other scripts
-importScripts('observatron_options.js', 'context_menu.js', 'filenames.js');
+  // Import other scripts
+ importScripts('observatron_options.js', 'context_menu.js', 'filenames.js', 'shared.js');
 
-// Import testable utility functions
-importScripts('note_parser.js', 'geometry_utils.js', 'worker_screenshot_utils.js');
+ // Import testable utility functions
+ importScripts('note_parser.js', 'geometry_utils.js', 'worker_screenshot_utils.js');
 
 console.log("Service worker started/reloaded");
 
 var options = new Options();
 var engagedDomain = null;
 var sideBarSide= "left";
+var sidepanelShown = false;
 
 // Load saved options on startup
 chrome.storage.local.get(['observatron'], function(result) {
@@ -53,7 +54,16 @@ chrome.action.onClicked.addListener((tab) => {
 chrome.webNavigation.onCompleted.addListener(configuredOnPageLoad);
 
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-  configuredOnPageUpdated(tabId, changeInfo, tab);
+   configuredOnPageUpdated(tabId, changeInfo, tab);
+   manageSidepanelOnTabUpdate(tabId, changeInfo, tab);
+});
+
+chrome.tabs.onCreated.addListener(function(tab) {
+   manageSidepanelOnTabCreate(tab);
+});
+
+chrome.tabs.onActivated.addListener(function(activeInfo) {
+   manageSidepanelOnTabActivate(activeInfo.tabId);
 });
 
 // download any form submissions
@@ -70,7 +80,7 @@ chrome.commands.onCommand.addListener(function(command) {
 
 // context menu
 var contextMenus = new ContextMenus();
-contextMenus.init(downloadScreenshot, saveAsMhtml, options);
+contextMenus.init(downloadScreenshot, saveAsMhtml, saveComments, options);
 
 // Create context menus on install
 chrome.runtime.onInstalled.addListener(() => {
@@ -114,7 +124,10 @@ function changedOptions(){
         chrome.tabs.sendMessage(tab.id, {
           method: 'observatronStatusChanged',
           engaged: options.engaged,
-          domain: engagedDomain
+          domain: engagedDomain,
+          onPageMutation: options.onPageMutation,
+          onInputChanges: options.onInputChanges,
+          onClickEvents: options.onClickEvents
         }).catch(() => {
           // Ignore errors for tabs that don't have content scripts
         });
@@ -141,35 +154,47 @@ function requestMethodHandler(request, sender, sendResponse){
     return true;
   }
 
-  // Handle saveNote regardless of engagement status
-  if (request.method === 'saveNote') {
-    saveNoteFromMessage(request.noteText, request.withScreenshot, request.withElementScreenshot);
-    if (request.withElementScreenshot) {
-      // Refresh element data first
-      chrome.runtime.sendMessage({type: 'updateElementData'});
-      setTimeout(() => {
-        // Get updated selected element data and take screenshot
-        chrome.storage.local.get(['selectedElement'], function(result) {
-          const element = result.selectedElement;
-          // Use the tab ID from the request (sent by sidepanel)
-          const tabId = request.tabId;
-          if (element && tabId) {
-            takeElementScreenshot(element.selector, element.rect, tabId);
-          } else if (!tabId) {
-            console.warn("No tab ID available for element screenshot");
-          }
-        });
-      }, 500);
-    }
-    sendResponse({success: true});
-    return true; // Keep the message channel open for async response
-  }
+   // Handle saveNote regardless of engagement status
+   if (request.method === 'saveNote') {
+     saveNoteFromMessage(request.noteText, request.withScreenshot, request.withElementScreenshot);
+     if (request.withElementScreenshot) {
+       // Refresh element data first
+       chrome.runtime.sendMessage({type: 'updateElementData'});
+       setTimeout(() => {
+         // Get updated selected element data and take screenshot
+         chrome.storage.local.get(['selectedElement'], function(result) {
+           const element = result.selectedElement;
+           // Use the tab ID from the request (sent by sidepanel)
+           const tabId = request.tabId;
+           if (element && tabId) {
+             takeElementScreenshot(element.selector, element.rect, tabId);
+           } else if (!tabId) {
+             console.warn("No tab ID available for element screenshot");
+           }
+         });
+       }, 500);
+     }
+     sendResponse({success: true});
+     return true; // Keep the message channel open for async response
+   }
+
+   // Handle brokenLinksFound regardless of engagement status
+   if (request.method === 'brokenLinksFound') {
+     handleBrokenLinks(request.links);
+     return false;
+   }
+
+   // Handle brokenImagesFound regardless of engagement status
+   if (request.method === 'brokenImagesFound') {
+     handleBrokenAssets(request.images, 'Image');
+     return false;
+   }
 
 
 
   // Handle status requests
   if (request.method === 'getStatus') {
-    sendResponse({engaged: options.engaged, domain: engagedDomain});
+    sendResponse({engaged: options.engaged, domain: engagedDomain, onClickEvents: options.onClickEvents, onInputChanges: options.onInputChanges, onPageMutation: options.onPageMutation});
     return true;
   }
 
@@ -234,15 +259,22 @@ function requestMethodHandler(request, sender, sendResponse){
     }
   }
 
-  if (request.method === 'scrolled') {
-    if(options.onScrollEvent === true){
-      console.log("shot on scrolled");
-      takeScreenshotIfWeCareAboutPage();
-      return false;
-    }
-  }
+   if (request.method === 'scrolled') {
+     if(options.onScrollEvent === true){
+       console.log("shot on scrolled");
+       takeScreenshotIfWeCareAboutPage();
+       return false;
+     }
+   }
 
-  return false;
+    if (request.method === 'htmlCommentsFound') {
+      handleHtmlComments(request.comments, request.url);
+      return true;
+    }
+
+
+
+   return false;
 
 }
 
@@ -272,6 +304,15 @@ function toggle_observatron_status(tab){
       options.engaged = false;
       engagedDomain = null; // Clear the engaged domain
 
+       // Clear HTML comment hashes
+       chrome.storage.session.set({htmlCommentHashes: []});
+       // Clear broken link queue and hashes
+       console.log('Observatron: Clearing broken link queue and hashes on disengage');
+       chrome.storage.session.set({brokenLinkQueue: [], brokenLinkHashes: []});
+       // Clear broken image queue and hashes
+       console.log('Observatron: Clearing broken image queue and hashes on disengage');
+       chrome.storage.session.set({brokenImageQueue: [], brokenImageHashes: []});
+
       changedOptions();
 
       chrome.action.setIcon({path: chrome.runtime.getURL("icons/red.png")});
@@ -283,35 +324,35 @@ function toggle_observatron_status(tab){
       console.log("Observatron Engaged");
       options.engaged=true;
 
-      // Record the current domain
-      chrome.tabs.query({ currentWindow: true, active: true }, function(tabs) {
-        if (tabs[0] && tabs[0].url) {
-          try {
-            engagedDomain = new URL(tabs[0].url).hostname;
-            console.log("Observatron engaged on domain:", engagedDomain);
-          } catch (e) {
-            engagedDomain = null;
-            console.log("Could not parse domain from URL:", tabs[0].url);
-          }
-        }
-        simulatePageLoadForTab(tabs);
-      });
+       // Clear HTML comment hashes for new session
+       chrome.storage.session.set({htmlCommentHashes: []});
+       // Clear broken link queue and hashes for new session
+       console.log('Observatron: Clearing broken link queue and hashes for new session');
+       chrome.storage.session.set({brokenLinkQueue: [], brokenLinkHashes: []});
+       // Clear broken image queue and hashes for new session
+       console.log('Observatron: Clearing broken image queue and hashes for new session');
+       chrome.storage.session.set({brokenImageQueue: [], brokenImageHashes: []});
 
-      changedOptions();
+       // Record the current domain and update UI
+       chrome.tabs.query({ currentWindow: true, active: true }, function(tabs) {
+         if (tabs[0] && tabs[0].url) {
+           try {
+             engagedDomain = new URL(tabs[0].url).hostname;
+             console.log("Observatron engaged on domain:", engagedDomain);
+           } catch (e) {
+             engagedDomain = null;
+             console.log("Could not parse domain from URL:", tabs[0].url);
+           }
+         }
+         simulatePageLoadForTab(tabs);
 
-      chrome.storage.local.set({observatron_screenshotter:
-                                   {resize_timeout: options.resize_timeout_milliseconds,
-                                    scrolling_timeout: options.resize_timeout_milliseconds}
-                                 });
+         // Update UI after domain is set
+         chrome.action.setIcon({path: chrome.runtime.getURL("icons/green.png")});
+         chrome.action.setTitle({title:"Disengage The Observatron from " + (engagedDomain || 'unknown')});
+         showSidePanel(tab.id,true);
+       });
 
-      // tabs.getCurrent provided an undefined tab  
-      //chrome.tabs.getCurrent(simulatePageLoadForTab);
-
-      
-      chrome.action.setIcon({path: chrome.runtime.getURL("icons/green.png")});
-      chrome.action.setTitle({title:"Disengage The Observatron"});
-            // user must manually show side bar because we also have the devtools
-      //showSidePanel(tab.id,true);
+       changedOptions();
     }
 }
 
@@ -343,9 +384,7 @@ function configuredOnPageLoad(anObject){
     //console.log(options);
     //console.log(anObject);
 
-  if(options.onPageLoad){
-
-    console.log("page load");
+  if(options.onPageLoad || options.onPageLoadDetectHtmlComments || options.onPageLoadLogHtmlCommentsAsNotes){
 
     if(!anObject.hasOwnProperty('frameId')){
       return;
@@ -360,16 +399,50 @@ function configuredOnPageLoad(anObject){
       return;
     }
 
-    // Check if the navigation is on the engaged domain
-    chrome.tabs.get(anObject.tabId, function(tab) {
-      if (tab && isTabOnEngagedDomain(tab.url)) {
-        downloadAsLog( "url", anObject, "url");
-        saveAsMhtml(anObject.tabId);
-        takeScreenshotIfWeCareAboutPage();
-      }
-    });
+     // Check if the navigation is on the engaged domain
+     chrome.tabs.get(anObject.tabId, function(tab) {
+       if (tab && isTabOnEngagedDomain(tab.url)) {
+         if(options.onPageLoad){
+           console.log("page load");
+           downloadAsLog( "url", anObject, "url");
+           saveAsMhtml(anObject.tabId);
+           takeScreenshotIfWeCareAboutPage();
+         }
 
-  }
+          if (options.onPageLoadDetectHtmlComments || options.onPageLoadLogHtmlCommentsAsNotes) {
+            chrome.storage.session.get(['htmlCommentHashes'], function(result) {
+              const seenHashes = result.htmlCommentHashes || [];
+              chrome.tabs.sendMessage(anObject.tabId, {
+                method: 'scanHtmlComments',
+                detectEnabled: options.onPageLoadDetectHtmlComments,
+                seenHashes: seenHashes
+              });
+            });
+          }
+
+          if (options.reportBrokenLinks) {
+            chrome.storage.session.get(['brokenLinkHashes'], function(result) {
+              const checkedHashes = result.brokenLinkHashes || [];
+              chrome.tabs.sendMessage(anObject.tabId, {
+                method: 'scanBrokenLinks',
+                checkedHashes: checkedHashes
+              });
+            });
+          }
+
+          if (options.reportBrokenImages) {
+            chrome.storage.session.get(['brokenImageHashes'], function(result) {
+              const checkedHashes = result.brokenImageHashes || [];
+              chrome.tabs.sendMessage(anObject.tabId, {
+                method: 'scanBrokenImages',
+                checkedHashes: checkedHashes
+              });
+            });
+          }
+       }
+     });
+
+   }
 }
 
 async function showSidePanel(tabId, shown){
@@ -384,45 +457,81 @@ async function showSidePanel(tabId, shown){
       tabId: useTabId,
       path: 'sidepanel/sidepanel.html',
       enabled: shown
-      }, ()=> {
-            if(shown){
-                try{
-                    chrome.sidePanel.open({ tabId: tabId });
-                }catch(e){
-                    console.log("showSidePanel: " + e);
-                }
-            }
-        }
+      }
     );
+
+    sidepanelShown = shown;
 }
 
 function configuredOnPageUpdated(tabId, changeInfo, tab){
 
-  // https://developer.chrome.com/extensions/tabs#event-onUpdated
-  if(!isObservatronEngaged()){
-    showSidePanel(tabId, false);
-    return;
-  }
+   // https://developer.chrome.com/extensions/tabs#event-onUpdated
+   if(!isObservatronEngaged()){
+     showSidePanel(tabId, false);
+     return;
+   }
 
-  // Check if tab is on the engaged domain
-  if (!isTabOnEngagedDomain(tab.url)) {
-    showSidePanel(tabId, false);
-    return;
-  }
+   // Check if tab is on the engaged domain
+   if (!isTabOnEngagedDomain(tab.url)) {
+     showSidePanel(tabId, false);
+     return;
+   }
 
-  if(options.onPageUpdated){
+   if(options.onPageUpdated){
 
-    showSidePanel(tabId, true);
+     showSidePanel(tabId, true);
 
-    if(changeInfo.hasOwnProperty("url")){
-      downloadAsLog( "url", changeInfo, "url");
-    }
+     if(changeInfo.hasOwnProperty("url")){
+       downloadAsLog( "url", changeInfo, "url");
+     }
 
-    if (changeInfo.status == 'complete') {
-      saveAsMhtml(tabId);
-      takeScreenshotIfWeCareAboutPage();
-    }
-  }
+     if (changeInfo.status == 'complete') {
+       saveAsMhtml(tabId);
+       takeScreenshotIfWeCareAboutPage();
+     }
+   }
+}
+
+function manageSidepanelOnTabUpdate(tabId, changeInfo, tab) {
+   if (!isObservatronEngaged()) {
+     return;
+   }
+
+   if (sidepanelShown) {
+     if (isTabOnEngagedDomain(tab.url)) {
+       showSidePanel(tabId, true);
+     } else {
+       showSidePanel(tabId, false);
+     }
+   }
+}
+
+function manageSidepanelOnTabCreate(tab) {
+   if (!isObservatronEngaged()) {
+     return;
+   }
+
+   if (sidepanelShown) {
+     if (isTabOnEngagedDomain(tab.url)) {
+       showSidePanel(tab.id, true);
+     }
+   }
+}
+
+function manageSidepanelOnTabActivate(tabId) {
+   if (!isObservatronEngaged() || !sidepanelShown) {
+     return;
+   }
+
+   chrome.tabs.get(tabId, function(tab) {
+     if (chrome.runtime.lastError) {
+       console.warn('Error getting tab:', chrome.runtime.lastError);
+       return;
+     }
+     if (isTabOnEngagedDomain(tab.url)) {
+       showSidePanel(tabId, true);
+     }
+   });
 }
 
 
@@ -493,8 +602,177 @@ function saveNoteFromMessage(noteText, withScreenshot, withElementScreenshot) {
   }
   if (withElementScreenshot) {
     // Element screenshot handling is done in the message handler
-  }
+   }
 }
+
+function simpleHash(str) {
+   let hash = 5381;
+   for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) + str.charCodeAt(i);
+   }
+   return hash;
+}
+
+// Shared functions for broken assets (links/images)
+async function checkAsset(url, timeoutMs = 10000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    let headResponse = null;
+    let headStatus = null;
+    try {
+        console.log('Observatron: Sending HEAD request to:', url);
+        headResponse = await fetch(url, { method: 'HEAD', signal: controller.signal });
+        headStatus = headResponse.status;
+        console.log('Observatron: HEAD response status:', headStatus);
+        if (headResponse.redirected) {
+            console.log('Observatron: Redirect detected:', url, '->', headResponse.url);
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            headStatus = 'timeout';
+            console.log('Observatron: HEAD request timed out');
+        } else {
+            headStatus = 'error';
+            console.log('Observatron: HEAD request failed:', error.message);
+        }
+    }
+    clearTimeout(timeoutId);
+
+    let getStatus = null;
+    if (headStatus === 'error' || headStatus === 'timeout' || headStatus >= 400) {
+        // Try GET
+        const getController = new AbortController();
+        const getTimeoutId = setTimeout(() => getController.abort(), timeoutMs);
+        try {
+            console.log('Observatron: Sending GET request to:', url);
+            const getResponse = await fetch(url, { method: 'GET', signal: getController.signal });
+            getStatus = getResponse.status;
+            console.log('Observatron: GET response status:', getStatus);
+            if (getResponse.redirected) {
+                console.log('Observatron: Redirect detected:', url, '->', getResponse.url);
+            }
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                getStatus = 'timeout';
+                console.log('Observatron: GET request timed out');
+            } else {
+                getStatus = 'error';
+                console.log('Observatron: GET request failed:', error.message);
+            }
+        }
+        clearTimeout(getTimeoutId);
+    }
+
+    return { headStatus, getStatus };
+}
+
+function createBrokenAssetNote(assetType, source, url, text, headStatus, getStatus) {
+    console.log('Observatron: Asset is broken, creating note');
+    const assetName = assetType.toLowerCase();
+    const noteText = `! Broken ${assetName} found on ${source}\n- ${url}\n- "${text}"\n- HEAD status: ${headStatus}\n- GET status: ${getStatus}`;
+    saveNoteFromMessage(noteText, false, false);
+}
+
+async function handleBrokenAssets(assets, assetType) {
+    console.log('Observatron: Handling broken', assetType + 's, received count:', assets.length);
+    const queueKey = `broken${assetType}Queue`;
+    const hashesKey = `broken${assetType}Hashes`;
+
+    // Load existing queue and checked hashes
+    const result = await chrome.storage.session.get([queueKey, hashesKey]);
+    let queue = result[queueKey] || [];
+    const checkedHashes = new Set(result[hashesKey] || []);
+
+    console.log('Observatron: Existing queue length:', queue.length, 'checked hashes:', checkedHashes.size);
+
+    // Add new assets to queue if not already checked
+    let added = 0;
+    for (const asset of assets) {
+        if (!checkedHashes.has(asset.hash)) {
+            queue.push(asset);
+            checkedHashes.add(asset.hash);
+            added++;
+        }
+    }
+
+    console.log('Observatron: Added', added, 'new', assetType + 's to queue. New queue length:', queue.length);
+
+    // Save updated queue and hashes
+    const update = {};
+    update[queueKey] = queue;
+    update[hashesKey] = Array.from(checkedHashes);
+    chrome.storage.session.set(update);
+
+    // Start processing if not already running
+    processBrokenAssetQueue(assetType);
+}
+
+async function processBrokenAssetQueue(assetType) {
+    const queueKey = `broken${assetType}Queue`;
+    const timeoutKey = `reportBroken${assetType}sTimeoutMs`;
+    const delayKey = `reportBroken${assetType}sCheckDelayMs`;
+
+    const result = await chrome.storage.session.get([queueKey]);
+    let queue = result[queueKey] || [];
+
+    console.log('Observatron: Processing broken', assetType, 'queue, current length:', queue.length);
+
+    if (queue.length === 0) {
+        console.log('Observatron: Queue empty, stopping processing');
+        return;
+    }
+
+    const asset = queue.shift(); // Process first item
+    console.log('Observatron: Processing', assetType + ':', asset.url, 'from', asset.source);
+
+    const timeout = options[timeoutKey] || 10000;
+    const { headStatus, getStatus } = await checkAsset(asset.url, timeout);
+
+    if ((headStatus === 'error' || headStatus === 'timeout' || headStatus >= 400) && (getStatus === 'error' || getStatus === 'timeout' || getStatus >= 400)) {
+        createBrokenAssetNote(assetType, asset.source, asset.url, asset.text, headStatus, getStatus);
+    } else {
+        console.log('Observatron: Asset is OK');
+    }
+
+    // Save updated queue
+    const update = {};
+    update[queueKey] = queue;
+    chrome.storage.session.set(update);
+    console.log('Observatron: Saved updated queue, new length:', queue.length);
+
+    // Schedule next check after delay
+    const delay = options[delayKey] || 1000;
+    console.log('Observatron: Scheduling next check in', delay, 'ms');
+    setTimeout(() => processBrokenAssetQueue(assetType), delay);
+}
+
+async function handleHtmlComments(comments, url) {
+    // Load existing seen hashes
+    const result = await chrome.storage.session.get(['htmlCommentHashes']);
+    const seenHashes = new Set(result.htmlCommentHashes || []);
+
+    // Comments received are already filtered to be new
+    for (const comment of comments) {
+       const hash = simpleHash(comment);
+       seenHashes.add(hash);
+    }
+
+    // Save all new comments in a single note
+    if (options.onPageLoadLogHtmlCommentsAsNotes && comments.length > 0) {
+       const noteText = `@AutoNote HTML Comments (${comments.length}) found at URL ${url} :\n\n- ${comments.join('\n- ')}`;
+       saveNoteFromMessage(noteText, false, false);
+    }
+
+    // Save updated hashes
+    chrome.storage.session.set({htmlCommentHashes: Array.from(seenHashes)});
+}
+
+async function handleBrokenLinks(links) {
+    await handleBrokenAssets(links, 'Link');
+}
+
+
 
 function logEvent(event) {
   var eventId = Math.floor(Date.now());
@@ -502,6 +780,16 @@ function logEvent(event) {
   downloadAsLog("userEvent"+"_"+eventId, event);
 }
 
+
+function saveComments() {
+  getCurrentTab().then(function(tab){
+          chrome.tabs.sendMessage(tab.id, { method: 'scanCommentsForSave' }, function(response) {
+              if (response) {
+                  saveCommentsAsMarkdown(response.comments, response.url);
+              }
+          });
+    });
+}
 
 
 function saveAsMhtml(anId){

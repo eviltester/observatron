@@ -35,6 +35,9 @@
     <div>
         <button id="takeScreenshot">Take Screenshot</button>
         <button id="savePage">Save Page</button>
+        <button id="saveComments">Save Comments</button>
+        <button id="checkBrokenLinks">Check Broken Links</button>
+        <button id="checkBrokenImages">Check Broken Images</button>
         <button id="takeElementScreenshot">Take Element Screenshot</button>
         <button id="addSelectedElement">Add Selected Element to Note</button>
     </div>
@@ -48,9 +51,11 @@
      <br>
      <label><input type="checkbox" id="withScreenshot"> Include screenshot</label>
      <br>
-      <label><input type="checkbox" id="withElementScreenshot"> Include element screenshot</label>
+       <label><input type="checkbox" id="withElementScreenshot"> Include element screenshot</label>
 
-      <h2>Notes Collection</h2>
+       <p><i>Background Processes: Links <span id="linkQueueLength">0</span> - Images <span id="imageQueueLength">0</span></i></p>
+
+       <h2>Notes Collection</h2>
       <details style="margin-bottom: 10px;">
           <summary>Save/Load/Clear Notes</summary>
           <div style="margin-top: 5px;">
@@ -86,8 +91,9 @@
           <div id="notes-container"></div>
       </details>
 
-      <script src="sidepanel.js"></script>
-    <script src="../javascript/observatron_options.js"></script>
-    <script src="../options/options.js"></script>
+       <script src="../javascript/shared.js"></script>
+       <script src="sidepanel.js"></script>
+     <script src="../javascript/observatron_options.js"></script>
+     <script src="../options/options.js"></script>
 </body>
 </html>

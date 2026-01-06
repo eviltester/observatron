@@ -47,6 +47,39 @@ Options.prototype.setOnDoubleClickShot = function(value){
 Options.prototype.setOnPostSubmit = function(value){
     this.setBooleanPropertyIfValid("onPostSubmit", value);
 };
+Options.prototype.setOnPageLoadDetectHtmlComments = function(value){
+    this.setBooleanPropertyIfValid("onPageLoadDetectHtmlComments", value);
+};
+Options.prototype.setOnPageLoadLogHtmlCommentsAsNotes = function(value){
+    this.setBooleanPropertyIfValid("onPageLoadLogHtmlCommentsAsNotes", value);
+};
+Options.prototype.setOnPageMutation = function(value){
+    this.setBooleanPropertyIfValid("onPageMutation", value);
+};
+Options.prototype.setOnInputChanges = function(value){
+    this.setBooleanPropertyIfValid("onInputChanges", value);
+};
+Options.prototype.setOnClickEvents = function(value){
+    this.setBooleanPropertyIfValid("onClickEvents", value);
+};
+Options.prototype.setOnReportBrokenLinks = function(value){
+    this.setBooleanPropertyIfValid("reportBrokenLinks", value);
+};
+Options.prototype.setReportBrokenLinksTimeoutMs = function(value){
+    this.setNumericPropertyIfValid("reportBrokenLinksTimeoutMs", value);
+};
+Options.prototype.setReportBrokenLinksCheckDelayMs = function(value){
+    this.setNumericPropertyIfValid("reportBrokenLinksCheckDelayMs", value);
+};
+Options.prototype.setOnReportBrokenImages = function(value){
+    this.setBooleanPropertyIfValid("reportBrokenImages", value);
+};
+Options.prototype.setReportBrokenImagesTimeoutMs = function(value){
+    this.setNumericPropertyIfValid("reportBrokenImagesTimeoutMs", value);
+};
+Options.prototype.setReportBrokenImagesCheckDelayMs = function(value){
+    this.setNumericPropertyIfValid("reportBrokenImagesCheckDelayMs", value);
+};
 Options.prototype.setScrollingTimeoutMilliseconds = function(value){
     this.setNumericPropertyIfValid("scrolling_timeout_milliseconds", value);
 }
@@ -80,6 +113,17 @@ function getDefaultOptions() {
         onPageUpdated: false,
         onDoubleClickShot: true,
         onPostSubmit: false,
+        onPageLoadDetectHtmlComments: false,
+        onPageLoadLogHtmlCommentsAsNotes: false,
+        onPageMutation: false,
+        onInputChanges: true,
+        onClickEvents: true,
+        reportBrokenLinks: false,
+        reportBrokenLinksTimeoutMs: 10000,
+        reportBrokenLinksCheckDelayMs: 1000,
+        reportBrokenImages: false,
+        reportBrokenImagesTimeoutMs: 10000,
+        reportBrokenImagesCheckDelayMs: 1000,
         filepath: "observatron/",
         fileprefix: "obs_",
         sessionName: "",

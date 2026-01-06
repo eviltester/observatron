@@ -5,10 +5,11 @@ function ContextMenus(){
     contextMenus = {};
     contextTypes = ["all", "page", "browser_action"];
 
-    this.init = function(downloadScreenshotFunction, saveAsMhtmlFunction, options){
+    this.init = function(downloadScreenshotFunction, saveAsMhtmlFunction, saveCommentsFunction, options){
         this.saveAsMhtml = saveAsMhtmlFunction;
         this.options = options;
         this.downloadScreenshot = downloadScreenshotFunction;
+        this.saveComments = saveCommentsFunction;
     }
 
     function createSeparator(id){
@@ -43,17 +44,8 @@ function ContextMenus(){
                 contextMenus.takeScreenshotNow = createMenu("takeScreenshotNow", "Take Screenshot Now");
                 contextMenus.saveAsMhtmlNow = createMenu("saveAsMhtmlNow", "Save as MHTML Now");
                 contextMenus.logNote = createMenu("logNote", "Take Note");
+                contextMenus.saveComments = createMenu("saveComments", "Save Comments");
                 contextMenus.showSidePanel = createMenu("showSidePanel", "Show Side Panel");
-                contextMenus.line = createSeparator("separator1");
-                contextMenus.screenshots = createParentMenu("screenshots", "Screenshot");
-                    contextMenus.toggleOnScroll = createCheckboxMenu("toggleOnScroll", "on Scroll", options.onScrollEvent, contextMenus.screenshots);
-                    contextMenus.toggleOnResize = createCheckboxMenu("toggleOnResize", "on resize", options.onResizeEvent, contextMenus.screenshots);
-                    contextMenus.toggleDoubleClick = createCheckboxMenu("toggleDoubleClick", "Screenshot on Double Click", options.onDoubleClickShot, contextMenus.screenshots);
-                contextMenus.log = createParentMenu("log", "Log");
-                    contextMenus.toggleOnPageLoad = createCheckboxMenu("toggleOnPageLoad", "on Page Load", options.onPageLoad, contextMenus.log);
-                    contextMenus.toggleOnPageUpdated = createCheckboxMenu("toggleOnPageUpdated", "on Page Updated", options.onPageUpdated, contextMenus.log);
-                    contextMenus.togglePostSubmit = createCheckboxMenu("togglePostSubmit", "POST form contents to a file", options.onPostSubmit, contextMenus.log);
-                //contextMenus.note = createParentMenu("Note");
 
                 contextMenus.line2 = createSeparator("separator2");
                 contextMenus.showOptionsNow = createMenu("showOptionsNow", "Options");
@@ -83,31 +75,18 @@ function ContextMenus(){
             case "logNote":
                 logANote();
                 return;
+            case "saveComments":
+                saveComments();
+                return;
             case "showSidePanel":
                 showSidePanel(tab.id, true);
+                chrome.sidePanel.open({ tabId: tab.id });
                 return;
-            case "togglePostSubmit":
-                options.onPostSubmit = !options.onPostSubmit;
-                break;
-            case "toggleOnScroll":
-                options.onScrollEvent = !options.onScrollEvent;
-                break;
-            case "toggleOnResize":
-                options.onResizeEvent = !options.onResizeEvent;
-                break;
-            case "toggleOnPageLoad":
-                options.onPageLoad = !options.onPageLoad;
-                break;
-            case "toggleOnPageUpdated":
-                options.onPageUpdated = !options.onPageUpdated;
-                break;
-            case "toggleDoubleClick":
-                options.onDoubleClickShot = !options.onDoubleClickShot;
-                break;
         }
 
-        updateTheContextMenus();
-        changedOptions();
+        // only if the menu contains options changing items
+        //updateTheContextMenus();
+        //changedOptions();
     }
 
     function contextMenuShowOptions(){
@@ -116,24 +95,12 @@ function ContextMenus(){
 
 
     function updateTheContextMenus(){
-        try {
-            chrome.contextMenus.update("togglePostSubmit", {"checked" : options.onPostSubmit});
-        } catch (e) { /* Menu might not exist */ }
-        try {
-            chrome.contextMenus.update("toggleOnScroll", {"checked" : options.onScrollEvent});
-        } catch (e) { /* Menu might not exist */ }
-        try {
-            chrome.contextMenus.update("toggleOnResize", {"checked" : options.onResizeEvent});
-        } catch (e) { /* Menu might not exist */ }
-        try {
-            chrome.contextMenus.update("toggleOnPageLoad", {"checked" : options.onPageLoad});
-        } catch (e) { /* Menu might not exist */ }
-        try {
-            chrome.contextMenus.update("toggleOnPageUpdated", {"checked" : options.onPageUpdated});
-        } catch (e) { /* Menu might not exist */ }
-        try {
-            chrome.contextMenus.update("toggleDoubleClick", {"checked" : options.onDoubleClickShot});
-        } catch (e) { /* Menu might not exist */ }
+        // add any menu updates here if options shown in context menu
+
+        // e.g.
+        // try {
+        //     chrome.contextMenus.update("togglePostSubmit", {"checked" : options.onPostSubmit});
+        // } catch (e) { /* Menu might not exist */ }
     }
 
     this.updateContextMenus = function(){
