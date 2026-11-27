@@ -216,8 +216,97 @@ function buildOptionsUI(containerId) {
     saveBtn.id = 'save';
     saveBtn.textContent = 'Save';
     container.appendChild(saveBtn);
+    buildSavedTrafficRulesUI(container);
+}
 
+function buildSavedTrafficRulesUI(container) {
+    const section = document.createElement('section');
+    section.innerHTML = `
+        <h2>Saved Traffic Rules</h2>
+        <p>These rules are available the next time you start Traffic Monitor in DevTools.</p>
+        <form>
+            <label for="saved-traffic-rule-input">New rules (one per line)</label>
+            <details id="saved-traffic-rule-syntax">
+                <summary>Rule syntax</summary>
+                <ul>
+                    <li><code>name = text</code> matches a literal substring.</li>
+                    <li><code>name = " text "</code> preserves the spaces inside the quotes.</li>
+                    <li><code>name = ""ok""</code> matches <code>"ok"</code>. Type the inner quotes directly.</li>
+                    <li><code>name * pattern</code> uses a JavaScript regular expression.</li>
+                </ul>
+            </details>
+            <textarea id="saved-traffic-rule-input" aria-describedby="saved-traffic-rule-syntax" rows="3" cols="44" spellcheck="false" required></textarea><br>
+            <button type="submit">Add to Saved Rules</button>
+        </form>
+        <p id="saved-traffic-rules-status" role="status"></p>
+        <p id="saved-traffic-rules-empty" hidden>No saved traffic rules.</p>
+        <ul id="saved-traffic-rules" aria-label="Saved traffic rules"></ul>`;
+    container.appendChild(section);
 
+    const form = section.querySelector('form');
+    const input = section.querySelector('textarea');
+    const add = form.querySelector('button');
+    const list = section.querySelector('#saved-traffic-rules');
+    const status = section.querySelector('#saved-traffic-rules-status');
+    const empty = section.querySelector('#saved-traffic-rules-empty');
+
+    form.addEventListener('submit', async event => {
+        event.preventDefault();
+        input.readOnly = true;
+        add.disabled = true;
+        try {
+            const rules = parseTrafficRules(input.value);
+            if (!rules.length) throw new Error('Enter at least one search rule.');
+            await changeSavedTrafficRules('add', rules);
+            input.value = '';
+            status.textContent = 'Traffic rules saved.';
+        } catch (error) {
+            status.textContent = error.message;
+        } finally {
+            input.readOnly = false;
+            add.disabled = false;
+            input.focus();
+        }
+    });
+
+    let receivedUpdate = false;
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace !== 'local' || !changes[savedTrafficRulesKey]) return;
+        receivedUpdate = true;
+        renderRules(changes[savedTrafficRulesKey].newValue || []);
+    });
+    getSavedTrafficRules().then(rules => {
+        if (!receivedUpdate) renderRules(rules);
+    }).catch(() => {
+        if (!receivedUpdate) status.textContent = 'Could not load saved traffic rules.';
+    });
+
+    function renderRules(rules) {
+        empty.hidden = rules.length > 0;
+        list.replaceChildren(...rules.map(rule => {
+            const item = document.createElement('li');
+            const text = document.createElement('code');
+            text.textContent = formatTrafficRule(rule);
+            text.style.whiteSpace = 'pre-wrap';
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.textContent = 'Remove';
+            remove.setAttribute('aria-label', `Remove ${text.textContent}`);
+            remove.addEventListener('click', async () => {
+                remove.disabled = true;
+                try {
+                    await changeSavedTrafficRules('remove', [rule]);
+                    status.textContent = 'Traffic rule removed.';
+                } catch (error) {
+                    status.textContent = error.message;
+                    remove.disabled = false;
+                    remove.focus();
+                }
+            });
+            item.append(text, ' ', remove);
+            return item;
+        }));
+    }
 }
 
 var options = new Options();

@@ -1,6 +1,7 @@
 import js from '@eslint/js'
 
 export default [
+  { ignores: ['chrome/vendor/axe-core/axe.min.js'] },
   js.configs.recommended,
   {
     ignores: [

@@ -1,4 +1,4 @@
-function saveCommentsAsMarkdown(comments, pageUrl) {
+async function saveCommentsAsMarkdown(comments, pageUrl) {
     if (comments.length === 0) {
         console.log('No HTML comments found on this page.');
         return;
@@ -20,15 +20,9 @@ function saveCommentsAsMarkdown(comments, pageUrl) {
     const dataURL = 'data:text/markdown;charset=utf-8,' + encodeURIComponent(markdown);
     const filename = `html_comments_${now.toISOString().split('T')[0]}.md`;
 
-    chrome.downloads.download({
+    await chrome.downloads.download({
         url: dataURL,
         filename: filename,
         saveAs: true
-    }, function(downloadId) {
-        if (chrome.runtime.lastError) {
-            console.warn('Download failed:', chrome.runtime.lastError.message);
-        } else {
-            console.log('Comments saved as:', filename);
-        }
     });
 }

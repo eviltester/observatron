@@ -1,5 +1,12 @@
 'use strict';
 
+function appendToNoteDraft(text) {
+    const draft = document.getElementById('noteText');
+    draft.value = draft.value ? `${draft.value}\n\n${text}` : text;
+    draft.focus();
+    draft.setSelectionRange(draft.value.length, draft.value.length);
+}
+
 document.getElementById('saveNote').addEventListener('click', function() {
     const noteText = document.getElementById('noteText').value;
     const withScreenshot = document.getElementById('withScreenshot').checked;
@@ -59,26 +66,6 @@ document.getElementById('savePage').addEventListener('click', function() {
             if (!chrome.runtime.lastError.message.includes('message port closed')) {
                 console.warn("Failed to savePage:", chrome.runtime.lastError.message);
             }
-        }
-    });
-});
-
-document.getElementById('saveComments').addEventListener('click', function() {
-    // Get the current tab and send message to content script
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-        const currentTabId = tabs[0] ? tabs[0].id : null;
-        if (currentTabId) {
-            chrome.tabs.sendMessage(currentTabId, {method: 'scanCommentsForSave'}, function(response) {
-                if (chrome.runtime.lastError) {
-                    if (!chrome.runtime.lastError.message.includes('message port closed')) {
-                        console.warn("Failed to scan comments:", chrome.runtime.lastError.message);
-                    }
-                    return;
-                }
-                if (response && response.comments) {
-                    saveCommentsAsMarkdown(response.comments, response.url);
-                }
-            });
         }
     });
 });

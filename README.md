@@ -1,14 +1,8 @@
 # Observatron
 
-A prototype exploratory testing observation tool for Chrome browser. Designed to allow
-people who are performing Exploratory Testing on a Web App to:
+Observatron is a Chrome extension for gathering evidence while you explore and test web applications. It can take screenshots, save MHTML page snapshots, log browser events, and organise notes, bugs, questions, and todos.
 
-- track notes
-- take screenshots
-- log events
-
-These are saved in a folder for future analysis e.g. by other tools, or by AI Coding Agents with
-file access.
+The side panel also has page checks for broken links, broken images, HTML comments, and accessibility. In Chrome DevTools, Traffic Monitor checks available HTTP request and response text for strings you choose. You can add findings to your notes alongside your other session evidence.
 
 You can download this from the Chrome Store:
 
@@ -116,6 +110,38 @@ e.g. "obs_2019-02-20-11-32-57-314-screenshot-1201x1104_note_1550662375417.jpg"
 
 This can help you cross-reference screenshots to notes, although the timestamping should mean that the screenshot is the next file saved after the note.
 
+## Page Checks
+
+Open the Observatron side panel or the **Test Observatron** panel in Chrome DevTools.
+
+- Use **Check Broken Links** and **Check Broken Images** to check resources on the current page. Both checks can also run during automated observation when enabled in Options.
+- Open **HTML Comments Review** and click **Scan For HTML Comments** to see the comments on the page. **Add to Note Draft** copies an individual comment to your draft, and **Save to Markdown** exports the full scan. **Clear Results** clears the review. The **Event Logging** options can also detect comments or log them as notes as you browse.
+- Open **Axe Accessibility Review** and click **Check Accessibility** to run axe-core on the current page's main document. Expand a finding to see its affected elements. **Needs Manual Review** lists checks axe could not decide, with the rule ID, guidance, and elements to inspect. **Show on Page** scrolls to an element and outlines it for five seconds. **Show HTML** displays the captured snippet. **Add to Note Draft** appends the finding, and **Clear Results** clears the review while preserving your draft.
+
+## Traffic Monitor
+
+Traffic Monitor brings the request and response text checks from [CDP Test Support](https://github.com/eviltester/cdptestsupport) into Observatron. Use it to find unexpected destinations for synthetic test data or to catch server messages you did not see in the UI.
+
+1. Open Chrome DevTools on the tab you are testing and select **Test Observatron**.
+2. Expand **Traffic Monitor** and add temporary rules under **Session-only rules**, one rule per line. **Use saved rules from Options** is checked by default. Uncheck it to run only the session rules.
+3. Click **Start Monitoring**, then exercise the feature. The monitor checks completed HTTP and HTTPS requests from that tab, including requests to other domains. The heading shows the match count and changes colour as matches arrive, even while the panel is collapsed. The non-interactive sidebar line mirrors the count and colour for the active tab.
+4. Tick the matches whose rules you want to reuse and click **Save Selected Rules to Options**. Manage these rules under **Options → Saved Traffic Rules**, where you can also add rules directly. Changes to saved rules take effect the next time you click **Start Monitoring**.
+5. Expand **Match details** to see the request URL, including query parameters, and a short excerpt highlighting the first occurrence in the request or response body. **Add to Note Draft** records the resource path and match location. **Clear Matches** empties the list, and **Stop Monitoring** ends the run. Closing DevTools discards the session rules and match list.
+
+Use the same rule syntax in Traffic Monitor and **Options → Saved Traffic Rules**.
+
+```text
+Checkout email = qa+checkout@example.test
+Padded value = " padded value   "
+Whole word * \btodo\b
+```
+
+`=` finds a case-sensitive literal substring. Double quotes around the value preserve every character inside them, including leading and trailing spaces. `*` takes a JavaScript regular expression with whitespace on both sides of the separator. Enter the pattern directly, without slash delimiters. A whole-word regex such as `\btodo\b` matches `todo` as a word.
+
+Matching covers request bodies and text response bodies that DevTools makes available after a request completes. Headers, URL parameters, binary data, and WebSocket messages are outside its scope. Start before exercising the page so the monitor can see the traffic you want to check.
+
+The monitor reports the rule name, request or response, HTTP method, resource URL, and time. Note drafts include the URL through the resource path and the line and column of the first match. Query parameters and body excerpts are available in the DevTools report. Saving a rule writes its name and exact search text to this browser profile. Use synthetic values as markers. The monitor works independently of the toolbar's **Engage Observatron** button, which scopes automated observation to the hostname where you engaged it.
+
 ## Keyboard Shortcuts
 
 To create a note:
@@ -204,7 +230,7 @@ Copyright 2019-2025 Compendium Developments Ltd, Alan Richardson
     - it captures 'input' events
     - i.e. changing checkbox, input field, etc.
 - log alert creation, display or interaction
-- capture http traffic - suggest using a proxy which exports HAR files e.g. Zap Proxy
+- save a full HTTP traffic archive. Traffic Monitor reports matches from the inspected tab, and the separate POST option logs form submissions when enabled.
     - does capture form posts as post events
 
 ### Does:
@@ -274,6 +300,12 @@ suggest - add a console log, or write an empty file, or add notification on scre
 
 # Versions
 
+- 1.0.3
+   - Added Traffic Monitor to the DevTools panel. Search available HTTP request and response text for named strings, including traffic to third-party destinations. Add observations to your notes and save selected search rules in Options for reuse.
+   - Show the rules and affected elements that need manual review in the Axe Accessibility Review.
+- 1.0.2
+   - Added a collapsible Axe Accessibility Review section for on-demand checks. Highlight affected elements on the page, expand their HTML snippets, add a finding to your note draft, or clear the results.
+   - Fixed monitoring so the selected hostname is restored after the extension’s service worker restarts.
 - 1.0.1
    - migrated html comment detection from Test Tool Hub
    - added more options to configure event checking
