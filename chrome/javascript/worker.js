@@ -2,7 +2,7 @@
 // https://stackoverflow.com/questions/10994324/chrome-extension-content-script-re-injection-after-upgrade-or-install/11598753#11598753
 
   // Import other scripts
- importScripts('observatron_options.js', 'context_menu.js', 'filenames.js', 'shared.js');
+ importScripts('observatron_options.js', 'context_menu.js', 'filenames.js', 'shared.js', 'traffic_rules.js');
 
  // Import testable utility functions
  importScripts('note_parser.js', 'geometry_utils.js', 'worker_screenshot_utils.js');
@@ -13,17 +13,11 @@ var options = new Options();
 var engagedDomain = null;
 var sideBarSide= "left";
 var sidepanelShown = false;
+let optionsLoaded = false;
 
-// Load saved options on startup
-chrome.storage.local.get(['observatron'], function(result) {
-  if (result.observatron) {
-    // Merge saved options with defaults
-    options = Object.assign(new Options(), result.observatron);
-  } else {
-    options = new Options();
-  }
-  changedOptions();
-});
+const optionsReady = restoreOptions();
+let engagementChange = optionsReady;
+let trafficRulesWrite = Promise.resolve();
  
 /*
    STORAGE
@@ -32,12 +26,21 @@ chrome.storage.local.get(['observatron'], function(result) {
 
 
 // https://developer.chrome.com/extensions/storage
-chrome.storage.onChanged.addListener(storageHasChanged);
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  optionsReady.then(() => storageHasChanged(changes, namespace));
+});
 
 
 // TODO: add and remove listeners based on options, not just soft toggle on variables
 
-chrome.runtime.onMessage.addListener(requestMethodHandler);
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (optionsLoaded) return requestMethodHandler(request, sender, sendResponse);
+
+  optionsReady.then(() => {
+    if (!requestMethodHandler(request, sender, sendResponse)) sendResponse();
+  });
+  return true;
+});
 
 
 if (chrome && chrome.runtime && chrome.runtime.onSuspend) {
@@ -48,28 +51,34 @@ if (chrome && chrome.runtime && chrome.runtime.onSuspend) {
 
 // Enable Disable on click
 chrome.action.onClicked.addListener((tab) => {
-  toggle_observatron_status(tab);
+  engagementChange = engagementChange.then(() => toggle_observatron_status(tab)).catch(error => {
+    console.error('Could not change Observatron engagement:', error);
+  });
 });
 
-chrome.webNavigation.onCompleted.addListener(configuredOnPageLoad);
+chrome.webNavigation.onCompleted.addListener(details => {
+  optionsReady.then(() => configuredOnPageLoad(details));
+});
 
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-   configuredOnPageUpdated(tabId, changeInfo, tab);
-   manageSidepanelOnTabUpdate(tabId, changeInfo, tab);
+   optionsReady.then(() => {
+     configuredOnPageUpdated(tabId, changeInfo, tab);
+     manageSidepanelOnTabUpdate(tabId, changeInfo, tab);
+   });
 });
 
 chrome.tabs.onCreated.addListener(function(tab) {
-   manageSidepanelOnTabCreate(tab);
+   optionsReady.then(() => manageSidepanelOnTabCreate(tab));
 });
 
 chrome.tabs.onActivated.addListener(function(activeInfo) {
-   manageSidepanelOnTabActivate(activeInfo.tabId);
+   optionsReady.then(() => manageSidepanelOnTabActivate(activeInfo.tabId));
 });
 
 // download any form submissions
 // https://developer.chrome.com/extensions/webRequest#event-onBeforeRequest
 chrome.webRequest.onBeforeRequest.addListener(
-  downloadPostForm,
+  details => { optionsReady.then(() => downloadPostForm(details)); },
   {urls: ["<all_urls>"]},["requestBody"] //"blocking", 
 );
 
@@ -103,20 +112,50 @@ contextMenus.createMenus();
 
 // TODO: this could be a message to set options on the backend
 
+async function restoreOptions() {
+  try {
+    const saved = await chrome.storage.local.get(['observatron', 'observatronEngagedDomain']);
+    engagedDomain = saved.observatronEngagedDomain || null;
+    options = Object.assign(new Options(), saved.observatron, {engaged: Boolean(engagedDomain)});
+
+    if (saved.observatron?.engaged !== options.engaged) {
+      await chrome.storage.local.set({observatron: options});
+    }
+    await updateActionStatus();
+  } catch (error) {
+    console.error('Could not restore Observatron options:', error);
+  } finally {
+    optionsLoaded = true;
+  }
+}
+
+async function updateSavedTrafficRules(action, rules) {
+  if (!['add', 'remove'].includes(action) || !Array.isArray(rules) || !rules.length ||
+      !rules.every(rule => typeof rule?.name === 'string' && rule.name.trim() &&
+          typeof rule.text === 'string' && rule.text &&
+          (rule.mode === undefined || rule.mode === 'regex'))) throw new Error('Invalid traffic rules.');
+
+  const selected = rules.map(({name, text, mode}) => mode === 'regex' ? {name, text, mode} : {name, text});
+  if (action === 'add') selected.forEach(compileTrafficPattern);
+  const saved = await getSavedTrafficRules();
+  const selectedKeys = new Set(selected.map(trafficRuleKey));
+  const next = action === 'add'
+    ? uniqueTrafficRules([...saved, ...selected])
+    : saved.filter(rule => !selectedKeys.has(trafficRuleKey(rule)));
+  if (next.length !== saved.length) await chrome.storage.local.set({[savedTrafficRulesKey]: next});
+}
+
 function storageHasChanged(changes, namespace) {
   if(namespace === "local"){
     if(changes.hasOwnProperty("observatron")){
-      console.log('Worker.js: Storage changed, sessionName:', changes["observatron"].newValue.sessionName);
-      options = changes["observatron"].newValue;
+      options = Object.assign(new Options(), changes.observatron.newValue, {engaged: Boolean(engagedDomain)});
       // Update context menus when options change
       contextMenus.updateContextMenus();
     }
   }
 }
 
-function changedOptions(){
-  chrome.storage.local.set({observatron: options});
-
+function notifyEngagementChanged(){
   // Notify all content scripts of the engagement status change
   chrome.tabs.query({}, function(tabs) {
     tabs.forEach(function(tab) {
@@ -147,9 +186,19 @@ function changedOptions(){
 //https://stackoverflow.com/questions/13141072/how-to-get-notified-on-window-resize-in-chrome-browser
 function requestMethodHandler(request, sender, sendResponse){
 
+  if (request.method === changeSavedTrafficRulesMethod) {
+    if (sender.url !== chrome.runtime.getURL('sidepanel/sidepanel.html') &&
+        sender.url !== chrome.runtime.getURL('options/options_page.html')) return false;
+
+    const write = trafficRulesWrite.then(() => updateSavedTrafficRules(request.action, request.rules));
+    trafficRulesWrite = write.catch(() => {});
+    write.then(() => sendResponse({success: true}), () => sendResponse({success: false}));
+    return true;
+  }
+
   // Handle update options request
   if (request.action === 'updateOptions') {
-    options = Object.assign(new Options(), request.options);
+    options = Object.assign(new Options(), request.options, {engaged: Boolean(engagedDomain)});
     sendResponse({success: true});
     return true;
   }
@@ -269,7 +318,7 @@ function requestMethodHandler(request, sender, sendResponse){
 
     if (request.method === 'htmlCommentsFound') {
       handleHtmlComments(request.comments, request.url);
-      return true;
+      return false;
     }
 
 
@@ -284,90 +333,49 @@ function isObservatronEngaged(){
 }
 
 function isTabOnEngagedDomain(taburl) {
-  if (!engagedDomain) return false;
+  return Boolean(engagedDomain) && getHostname(taburl) === engagedDomain;
+}
+
+function getHostname(url) {
   try {
-    const tabDomain = new URL(taburl).hostname;
-    return tabDomain === engagedDomain;
-  } catch (e) {
-    return false;
+    return new URL(url).hostname || null;
+  } catch {
+    return null;
   }
 }
 
 
 
 
-function toggle_observatron_status(tab){
+async function toggle_observatron_status(tab){
+  const domain = isObservatronEngaged() ? null : getHostname(tab.url);
+  if (!domain && !isObservatronEngaged()) return;
 
-    if(isObservatronEngaged()){
-      // switch it off
-      console.log("Observatron Disengaged");
-      options.engaged = false;
-      engagedDomain = null; // Clear the engaged domain
+  await chrome.storage.session.set({
+    htmlCommentHashes: [],
+    brokenLinkQueue: [],
+    brokenLinkHashes: [],
+    brokenImageQueue: [],
+    brokenImageHashes: []
+  });
+  const engaged = Boolean(domain);
+  await chrome.storage.local.set({observatron: {...options, engaged}, observatronEngagedDomain: domain});
 
-       // Clear HTML comment hashes
-       chrome.storage.session.set({htmlCommentHashes: []});
-       // Clear broken link queue and hashes
-       console.log('Observatron: Clearing broken link queue and hashes on disengage');
-       chrome.storage.session.set({brokenLinkQueue: [], brokenLinkHashes: []});
-       // Clear broken image queue and hashes
-       console.log('Observatron: Clearing broken image queue and hashes on disengage');
-       chrome.storage.session.set({brokenImageQueue: [], brokenImageHashes: []});
+  engagedDomain = domain;
+  options.engaged = engaged;
+  notifyEngagementChanged();
+  await Promise.all([updateActionStatus(), showSidePanel(tab.id, engaged)]);
 
-      changedOptions();
-
-      chrome.action.setIcon({path: chrome.runtime.getURL("icons/red.png")});
-      chrome.action.setTitle({title:"Engage The Observatron"});
-      showSidePanel(tab.id,false);
-
-    }else{
-      // switch it on
-      console.log("Observatron Engaged");
-      options.engaged=true;
-
-       // Clear HTML comment hashes for new session
-       chrome.storage.session.set({htmlCommentHashes: []});
-       // Clear broken link queue and hashes for new session
-       console.log('Observatron: Clearing broken link queue and hashes for new session');
-       chrome.storage.session.set({brokenLinkQueue: [], brokenLinkHashes: []});
-       // Clear broken image queue and hashes for new session
-       console.log('Observatron: Clearing broken image queue and hashes for new session');
-       chrome.storage.session.set({brokenImageQueue: [], brokenImageHashes: []});
-
-       // Record the current domain and update UI
-       chrome.tabs.query({ currentWindow: true, active: true }, function(tabs) {
-         if (tabs[0] && tabs[0].url) {
-           try {
-             engagedDomain = new URL(tabs[0].url).hostname;
-             console.log("Observatron engaged on domain:", engagedDomain);
-           } catch (e) {
-             engagedDomain = null;
-             console.log("Could not parse domain from URL:", tabs[0].url);
-           }
-         }
-         simulatePageLoadForTab(tabs);
-
-         // Update UI after domain is set
-         chrome.action.setIcon({path: chrome.runtime.getURL("icons/green.png")});
-         chrome.action.setTitle({title:"Disengage The Observatron from " + (engagedDomain || 'unknown')});
-         showSidePanel(tab.id,true);
-       });
-
-       changedOptions();
-    }
+  if (engaged) configuredOnPageLoad({frameId: 0, tabId: tab.id, url: tab.url});
 }
 
-function simulatePageLoadForTab(tab){
-
-  if(tab==undefined){
-    return;
-  }
-
-  var fakeWindowFromTab = {};
-  fakeWindowFromTab["frameId"] = 0;
-  fakeWindowFromTab["tabId"] = tab[0].id;
-  fakeWindowFromTab["url"] = tab[0].url;
-
-  configuredOnPageLoad(fakeWindowFromTab);
+function updateActionStatus(){
+  const icon = engagedDomain ? 'icons/green.png' : 'icons/red.png';
+  const title = engagedDomain ? `Disengage The Observatron from ${engagedDomain}` : 'Engage The Observatron';
+  return Promise.all([
+    chrome.action.setIcon({path: chrome.runtime.getURL(icon)}),
+    chrome.action.setTitle({title})
+  ]);
 }
 
 function configuredOnPageLoad(anObject){
@@ -785,7 +793,9 @@ function saveComments() {
   getCurrentTab().then(function(tab){
           chrome.tabs.sendMessage(tab.id, { method: 'scanCommentsForSave' }, function(response) {
               if (response) {
-                  saveCommentsAsMarkdown(response.comments, response.url);
+                  saveCommentsAsMarkdown(response.comments, response.url).catch(error => {
+                      console.warn('Could not save HTML comments:', error.message);
+                  });
               }
           });
     });

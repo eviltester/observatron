@@ -1,11 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8">
     <title>Observatron Note</title>
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; }
         textarea { width: 100%; height: 100px; }
         button { margin: 5px; }
+        #accessibility-review, #html-comments-review { margin: 10px 0; overflow-wrap: anywhere; }
+        #accessibility-review > summary, #html-comments-review > summary { font-weight: bold; }
+        #accessibility-findings details { margin: 8px 0; }
+        #accessibility-findings li + li { margin-top: 8px; }
+        .accessibility-guidance { white-space: pre-wrap; }
+        #accessibility-findings pre, #html-comment-findings pre, #traffic-matches pre {
+            white-space: pre-wrap;
+            max-height: 14em;
+            overflow: auto;
+            padding: 8px;
+            border: 1px solid #ccc;
+        }
+        #traffic-monitor { margin: 10px 0; overflow-wrap: anywhere; }
+        #traffic-monitor > summary, #traffic-monitor-sidebar-title { color: #000; font-weight: bold; }
+        #traffic-monitor-sidebar-note { margin: 10px 0; color: #595959; }
+        #traffic-matches li + li { margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -35,12 +52,53 @@
     <div>
         <button id="takeScreenshot">Take Screenshot</button>
         <button id="savePage">Save Page</button>
-        <button id="saveComments">Save Comments</button>
         <button id="checkBrokenLinks">Check Broken Links</button>
         <button id="checkBrokenImages">Check Broken Images</button>
         <button id="takeElementScreenshot">Take Element Screenshot</button>
         <button id="addSelectedElement">Add Selected Element to Note</button>
     </div>
+
+    <details id="accessibility-review">
+        <summary>Axe Accessibility Review</summary>
+        <button id="checkAccessibility" type="button">Check Accessibility</button>
+        <button id="clearAccessibility" type="button" disabled>Clear Results</button>
+        <p id="accessibility-status" role="status"></p>
+        <div id="accessibility-findings"></div>
+    </details>
+
+    <details id="html-comments-review">
+        <summary>HTML Comments Review</summary>
+        <button id="scan-html-comments" type="button">Scan For HTML Comments</button>
+        <button id="clear-html-comments" type="button" disabled>Clear Results</button>
+        <button id="export-html-comments" type="button" disabled>Save to Markdown</button>
+        <p id="html-comments-status" role="status"></p>
+        <ol id="html-comment-findings" aria-label="HTML comments"></ol>
+    </details>
+
+    <p id="traffic-monitor-sidebar-note"><span id="traffic-monitor-sidebar-title">Traffic Monitor (<span class="traffic-match-count">0 matches</span>)</span> is only available in the <strong>Test Observatron</strong> tab in DevTools.</p>
+
+    <details id="traffic-monitor" hidden>
+        <summary>Traffic Monitor (<span class="traffic-match-count">0 matches</span>)</summary>
+        <p>Search request and response text from this tab while DevTools is open, including traffic to other domains.</p>
+        <label for="traffic-rules">Session-only rules (one per line)</label>
+        <details id="session-traffic-rule-syntax">
+            <summary>Rule syntax</summary>
+            <ul>
+                <li><code>name = text</code> matches a literal substring.</li>
+                <li><code>name = " text "</code> preserves the spaces inside the quotes.</li>
+                <li><code>name = ""ok""</code> matches <code>"ok"</code>. Type the inner quotes directly.</li>
+                <li><code>name * pattern</code> uses a JavaScript regular expression.</li>
+            </ul>
+        </details>
+        <textarea id="traffic-rules" aria-describedby="session-traffic-rule-syntax" rows="3" spellcheck="false" placeholder="Checkout email = qa+checkout@example.test"></textarea>
+        <p><label><input id="include-saved-traffic-rules" type="checkbox" checked> Use saved rules from Options</label></p>
+        <button id="toggle-traffic-monitor" type="button">Start Monitoring</button>
+        <button id="clear-traffic-matches" type="button" disabled>Clear Matches</button>
+        <p id="traffic-status" role="status"></p>
+        <button id="save-selected-traffic-rules" type="button" disabled>Save Selected Rules to Options</button>
+        <p id="traffic-save-status" role="status" hidden></p>
+        <ul id="traffic-matches" aria-label="Traffic matches"></ul>
+    </details>
 
     <h2>Add Note to log</h2>
     <p>Format: (? question, ! bug, - todo, @customtype)</p>
@@ -93,6 +151,10 @@
 
        <script src="../javascript/shared.js"></script>
        <script src="sidepanel.js"></script>
+       <script src="accessibility.js"></script>
+       <script src="html_comments.js"></script>
+       <script src="../javascript/traffic_rules.js"></script>
+       <script src="traffic_monitor.js"></script>
      <script src="../javascript/observatron_options.js"></script>
      <script src="../options/options.js"></script>
 </body>
