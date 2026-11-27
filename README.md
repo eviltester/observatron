@@ -8,13 +8,13 @@ You can download this from the Chrome Store:
 
 - [The Observatron Chrome Store Page](https://chrome.google.com/webstore/detail/test-observer-the-observa/gdiemnbjpblghfbejnbohdnnmodbknoe)
 
-To self-install from source:
+### Install from a GitHub release
 
-- download the files from [releases](https://github.com/eviltester/observatron/releases)
-- visit [chrome://extensions](chrome://extensions)
-- switch on Developer mode
-- Load unpacked
-- choose the 'chrome' folder (the one with the manifest in it)
+1. Download `observatron-v-<version>.zip` from **Assets** on the [releases page](https://github.com/eviltester/observatron/releases) and extract it.
+2. Open `chrome://extensions` in Chrome and turn on **Developer mode**.
+3. Click **Load unpacked** and select the extracted folder containing `manifest.json`.
+
+If you cloned this repository, select the `chrome` folder to load the extension directly.
 
 ## Automated Observation
 
@@ -290,11 +290,11 @@ suggest - add a console log, or write an empty file, or add notification on scre
 
 ### Build and Deploy
 
-- update manifest version
-- update package.json version
-- `npm run build`
-- upload to dashboard
-   - https://chrome.google.com/webstore/developer/dashboard
+1. Update the version in `chrome/manifest.json` and `package.json` and land the changes on `master`.
+2. In GitHub, choose **Actions → Make Release → Run workflow** on `master`.
+3. The workflow runs lint and tests, then publishes `v<version>` with generated release notes and `observatron-v-<version>.zip`.
+
+`npm run build` creates the same ZIP locally under `release/`. Use that ZIP or download the release asset to submit it through the [Chrome Web Store developer dashboard](https://chrome.google.com/webstore/developer/dashboard).
   
 ---
 

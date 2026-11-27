@@ -1,0 +1,64 @@
+name: Make Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: make-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm install --no-package-lock
+
+      - name: Lint, test, and package the extension
+        run: npm run build
+
+      - name: Publish release and installable ZIP
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./chrome/manifest.json').version")
+          tag="v$version"
+          archive="release/observatron-v-$version.zip"
+
+          if tagged_commit=$(git rev-parse --verify --quiet "refs/tags/$tag^{commit}") && [[ "$tagged_commit" != "$GITHUB_SHA" ]]; then
+            echo "::error::Tag $tag already points to a different commit. Update the extension version before releasing."
+            exit 1
+          fi
+
+          unzip -tq "$archive"
+          unzip -p "$archive" manifest.json >/dev/null
+
+          notes=$(cat <<'EOF'
+          ## Install in Chrome
+
+          1. Download and extract the Observatron ZIP under **Assets**.
+          2. Open `chrome://extensions` and turn on **Developer mode**.
+          3. Click **Load unpacked** and select the extracted folder that contains `manifest.json`.
+          EOF
+          )
+
+          gh release create "$tag" "$archive#Installable Chrome extension" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Observatron $version" \
+            --generate-notes \
+            --notes "$notes"
