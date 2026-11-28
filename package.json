@@ -1,6 +1,6 @@
 {
   "name": "observatron",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A Chrome browser extension for exploratory testing observation",
   "main": "index.js",
   "scripts": {

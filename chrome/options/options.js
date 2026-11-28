@@ -16,6 +16,16 @@ function buildOptionsUI(containerId) {
     h1.textContent = 'Observatron Options';
     container.appendChild(h1);
 
+    const saveOnLeave = container.hasAttribute('data-save-on-leave');
+    const statusDiv = document.createElement('div');
+    statusDiv.id = 'status';
+    statusDiv.setAttribute('role', 'status');
+    if (saveOnLeave) {
+        const hint = document.createElement('p');
+        hint.textContent = 'Settings save when you switch tabs.';
+        container.append(hint, statusDiv);
+    }
+
     // Defaults button
     const defaultsDiv = document.createElement('div');
     const defaultsBtn = document.createElement('button');
@@ -85,7 +95,10 @@ function buildOptionsUI(containerId) {
     const eventLoggingCheckboxes = [
         {id: 'onpostformsubmit', label: 'Log POST form contents to a file'},
         {id: 'onpageloaddetecthtmlcomments', label: 'On Page Load - Detect HTML Comments'},
-        {id: 'onpageloadloghtmlcommentsasnotes', label: 'On Page Load - Log HTML Comments as Notes'},
+        {id: 'onpageloadaccessibilityreview', label: 'On Page Load - Run Accessibility Review'},
+        {id: 'auto-console-logging', label: 'Console Logging'},
+        {id: 'auto-traffic-monitoring', label: 'Traffic Monitoring'},
+        {id: 'auto-network-errors', label: 'Network Errors'},
         {id: 'onreportbrokenlinks', label: 'On Page Load - Report Broken Links'},
         {id: 'onreportbrokenimages', label: 'On Page Load - Report Broken Images'},
         {id: 'onpagemutation', label: 'On Page Mutation'},
@@ -101,6 +114,26 @@ function buildOptionsUI(containerId) {
         label.appendChild(document.createTextNode(' ' + cb.label));
         container.appendChild(label);
         container.appendChild(document.createElement('br'));
+        if (cb.id === 'onpageloaddetecthtmlcomments') {
+            container.appendChild(reviewOutputChoices(input, 'html-comments-output', 'HTML comment output',
+                'Log comments as AutoNotes', 'Log as HTML Comments Report'));
+        }
+        if (cb.id === 'onpageloadaccessibilityreview') {
+            container.appendChild(reviewOutputChoices(input, 'accessibility-output', 'Accessibility review output',
+                'Log accessibility findings as AutoNotes', 'Log as Accessibility Report'));
+        }
+        if (cb.id === 'auto-network-errors') {
+            container.appendChild(reviewOutputChoices(input, 'network-errors-output', 'Network Errors output',
+                'Log network errors as AutoNotes', 'Log as Network Errors Report'));
+        }
+        if (cb.id === 'onreportbrokenlinks') {
+            container.appendChild(reviewOutputChoices(input, 'broken-links-output', 'Broken links output',
+                'Log broken links as AutoNotes', 'Log as Broken Links Report'));
+        }
+        if (cb.id === 'onreportbrokenimages') {
+            container.appendChild(reviewOutputChoices(input, 'broken-images-output', 'Broken images output',
+                'Log broken images as AutoNotes', 'Log as Broken Images Report'));
+        }
     });
 
     // Output Configuration
@@ -205,25 +238,50 @@ function buildOptionsUI(containerId) {
     container.appendChild(brokenImagesDelayLabel);
     container.appendChild(document.createElement('br'));
 
-    // Save section
-    const h2Save = document.createElement('h2');
-    h2Save.textContent = 'Remember to save changes';
-    container.appendChild(h2Save);
-    const statusDiv = document.createElement('div');
-    statusDiv.id = 'status';
-    container.appendChild(statusDiv);
-    const saveBtn = document.createElement('button');
-    saveBtn.id = 'save';
-    saveBtn.textContent = 'Save';
-    container.appendChild(saveBtn);
+    if (!saveOnLeave) {
+        const h2Save = document.createElement('h2');
+        h2Save.textContent = 'Remember to save changes';
+        const saveBtn = document.createElement('button');
+        saveBtn.id = 'save';
+        saveBtn.type = 'button';
+        saveBtn.textContent = 'Save';
+        saveBtn.addEventListener('click', () => saveOptions());
+        container.append(h2Save, statusDiv, saveBtn);
+    }
     buildSavedTrafficRulesUI(container);
+}
+
+function reviewOutputChoices(enable, name, label, notesLabel, reportLabel) {
+    const choices = document.createElement('fieldset');
+    choices.id = `${name}-options`;
+    choices.setAttribute('aria-label', label);
+    choices.style.cssText = 'margin-inline-start: 1.5rem; padding: 0; border: 0;';
+    for (const [value, text] of [['notes', notesLabel], ['report', reportLabel]]) {
+        const choice = document.createElement('label');
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = name;
+        radio.value = value;
+        radio.checked = value === 'report';
+        choice.append(radio, ` ${text}`);
+        choices.append(choice, document.createElement('br'));
+    }
+    choices.disabled = !enable.checked;
+    enable.addEventListener('change', () => { choices.disabled = !enable.checked; });
+    return choices;
+}
+
+function showReviewOutput(name, output, enabled) {
+    const value = output === 'notes' ? 'notes' : 'report';
+    document.querySelector(`input[name="${name}"][value="${value}"]`).checked = true;
+    document.getElementById(`${name}-options`).disabled = !enabled;
 }
 
 function buildSavedTrafficRulesUI(container) {
     const section = document.createElement('section');
     section.innerHTML = `
         <h2>Saved Traffic Rules</h2>
-        <p>These rules are available the next time you start Traffic Monitor in DevTools.</p>
+        <p>These rules are available the next time you start Traffic Monitor.</p>
         <form>
             <label for="saved-traffic-rule-input">New rules (one per line)</label>
             <details id="saved-traffic-rule-syntax">
@@ -309,30 +367,12 @@ function buildSavedTrafficRulesUI(container) {
     }
 }
 
-var options = new Options();
+let options = getDefaultOptions();
+let optionsFormBaseline;
+let optionsStatusTimer;
 
-
-chrome.storage.onChanged.addListener(function(changes, namespace) {
-  if(namespace === "local"){
-    if(changes.hasOwnProperty("observatron")){
-      restore_options();
-    }
-  }
-});
-
-
-
-function getObservatronDefaults(){
-    chrome.storage.local.get(['observatron'], setObservatronDefaults);
-}
-
-function save_options() {
-
-    var newOptions = new Options(); // defaults are set so only set if valid
-
-    // Preserve the current engaged state
-    newOptions.engaged = options.engaged;
-
+function readOptionsForm() {
+    const newOptions = new Options();
     newOptions.setOnResizeEvent(document.getElementById('onresize').checked);
     newOptions.setOnScrollEvent(document.getElementById('onscroll').checked);
     newOptions.setOnPageLoad(document.getElementById('onpageload').checked);
@@ -340,9 +380,17 @@ function save_options() {
     newOptions.setOnDoubleClickShot(document.getElementById('ondoubleclick').checked);
     newOptions.setOnPostSubmit(document.getElementById('onpostformsubmit').checked);
     newOptions.setOnPageLoadDetectHtmlComments(document.getElementById('onpageloaddetecthtmlcomments').checked);
-    newOptions.setOnPageLoadLogHtmlCommentsAsNotes(document.getElementById('onpageloadloghtmlcommentsasnotes').checked);
+    newOptions.setHtmlCommentsOutput(document.querySelector('input[name="html-comments-output"]:checked').value);
+    newOptions.setOnPageLoadAccessibilityReview(document.getElementById('onpageloadaccessibilityreview').checked);
+    newOptions.setAccessibilityOutput(document.querySelector('input[name="accessibility-output"]:checked').value);
+    newOptions.autoConsoleLogging = document.getElementById('auto-console-logging').checked;
+    newOptions.autoTrafficMonitoring = document.getElementById('auto-traffic-monitoring').checked;
+    newOptions.autoNetworkErrors = document.getElementById('auto-network-errors').checked;
+    newOptions.networkErrorsOutput = document.querySelector('input[name="network-errors-output"]:checked').value;
     newOptions.setOnReportBrokenLinks(document.getElementById('onreportbrokenlinks').checked);
     newOptions.setOnReportBrokenImages(document.getElementById('onreportbrokenimages').checked);
+    newOptions.brokenLinksOutput = document.querySelector('input[name="broken-links-output"]:checked').value;
+    newOptions.brokenImagesOutput = document.querySelector('input[name="broken-images-output"]:checked').value;
     newOptions.setOnPageMutation(document.getElementById('onpagemutation').checked);
     newOptions.setOnInputChanges(document.getElementById('oninputchanges').checked);
     newOptions.setOnClickEvents(document.getElementById('onclickevents').checked);
@@ -358,60 +406,60 @@ function save_options() {
     newOptions.setFilePrefix(document.getElementById('fileprefix').value);
     newOptions.setSessionName(document.getElementById('sessionname').value);
     newOptions.setFolderStructure(document.getElementById('folderStructure').value);
+    return newOptions;
+}
 
-    options = newOptions;
-
-    try {
-      chrome.storage.local.set({observatron: options}, function() {
-        if (chrome.runtime.lastError) {
-          if (!chrome.runtime.lastError.message.includes('Extension context invalidated')) {
-            console.error('Error saving options:', chrome.runtime.lastError);
-            var status = document.getElementById('status');
-            status.textContent = 'Error saving options.';
-            setTimeout(function() {
-              status.textContent = '';
-            }, 750);
-          }
-          // Ignore "Extension context invalidated" errors
-          return;
-        }
-        // Update status to let user know options were saved.
-        var status = document.getElementById('status');
-        status.textContent = 'Options saved.';
-        setTimeout(function() {
-          status.textContent = '';
-        }, 750);
-      });
-    } catch (error) {
-      if (!error.message.includes('Extension context invalidated')) {
-        console.error('Error in save_options:', error);
-        var status = document.getElementById('status');
-        status.textContent = 'Error saving options.';
-        setTimeout(function() {
-          status.textContent = '';
-        }, 750);
-      }
-      // Ignore "Extension context invalidated" errors
+function editedOptions() {
+    if (!optionsFormBaseline) return {};
+    const current = readOptionsForm();
+    const edits = {};
+    for (const key of Object.keys(getDefaultOptions())) {
+        if (key !== 'engaged' && current[key] !== optionsFormBaseline[key]) edits[key] = current[key];
     }
-  }
-  
-  // Restores select box and checkbox state using the preferences
-  // stored in chrome.storage.
-  function restore_options() {
-        getObservatronDefaults();
-  }
+    return edits;
+}
 
- 
+function saveOptionsOnLeave() {
+    const edits = editedOptions();
+    if (Object.keys(edits).length) return saveOptions(edits);
+    if (optionsFormBaseline) showStoredOptions(options);
+    return true;
+}
 
+async function saveOptions(edits = editedOptions()) {
+    const container = document.getElementById('options-container');
+    const status = document.getElementById('status');
+    const focused = document.activeElement;
+    clearTimeout(optionsStatusTimer);
+    container.inert = true;
+    try {
+        if (Object.keys(edits).length) {
+            const {observatron} = await chrome.storage.local.get('observatron');
+            const next = {...getDefaultOptions(), ...migratePageReviewOptions(observatron), ...edits};
+            await chrome.storage.local.set({observatron: next});
+            showStoredOptions(next, true);
+        }
+        status.textContent = 'Options saved.';
+        optionsStatusTimer = setTimeout(() => { status.textContent = ''; }, 750);
+        return true;
+    } catch (error) {
+        console.error('Error saving options:', error);
+        status.textContent = 'Could not save your changes. Try again.';
+        return false;
+    } finally {
+        container.inert = false;
+        if (container.contains(focused)) focused.focus();
+    }
+}
 
-
-function setObservatronDefaults(setoptions){
-  if(setoptions){
-      options = setoptions.observatron;
-        //console.log("set popup defaults from observatron");
-        displayObservatronOptionsOnGUI(options);
-  
-  }
+function showStoredOptions(stored, savedLocally = false) {
+    options = {...getDefaultOptions(), ...migratePageReviewOptions(stored)};
+    if (!savedLocally && Object.keys(editedOptions()).length) {
+        setHeadingOnPage();
+        return;
+    }
+    displayObservatronOptionsOnGUI(options);
+    optionsFormBaseline = readOptionsForm();
 }
 
 function displayObservatronOptionsOnGUI(options){
@@ -424,9 +472,17 @@ function displayObservatronOptionsOnGUI(options){
    document.getElementById('ondoubleclick').checked = options.onDoubleClickShot;
    document.getElementById('onpostformsubmit').checked = options.onPostSubmit;
     document.getElementById('onpageloaddetecthtmlcomments').checked = options.onPageLoadDetectHtmlComments;
-    document.getElementById('onpageloadloghtmlcommentsasnotes').checked = options.onPageLoadLogHtmlCommentsAsNotes;
+    showReviewOutput('html-comments-output', options.htmlCommentsOutput, options.onPageLoadDetectHtmlComments);
+    document.getElementById('onpageloadaccessibilityreview').checked = options.onPageLoadAccessibilityReview;
+    showReviewOutput('accessibility-output', options.accessibilityOutput, options.onPageLoadAccessibilityReview);
+    document.getElementById('auto-console-logging').checked = options.autoConsoleLogging;
+    document.getElementById('auto-traffic-monitoring').checked = options.autoTrafficMonitoring;
+    document.getElementById('auto-network-errors').checked = options.autoNetworkErrors;
+    showReviewOutput('network-errors-output', options.networkErrorsOutput, options.autoNetworkErrors);
     document.getElementById('onreportbrokenlinks').checked = options.reportBrokenLinks;
     document.getElementById('onreportbrokenimages').checked = options.reportBrokenImages;
+    showReviewOutput('broken-links-output', options.brokenLinksOutput, options.reportBrokenLinks);
+    showReviewOutput('broken-images-output', options.brokenImagesOutput, options.reportBrokenImages);
     document.getElementById('onpagemutation').checked = options.onPageMutation;
     document.getElementById('oninputchanges').checked = options.onInputChanges;
     document.getElementById('onclickevents').checked = options.onClickEvents;
@@ -465,11 +521,19 @@ function setHeadingOnPage(){
   Setup the page
 */
 
-getObservatronDefaults();
-
 document.addEventListener('DOMContentLoaded', function() {
     buildOptionsUI('options-container');
-    restore_options();
-    document.getElementById('save').addEventListener('click', save_options);
+    showStoredOptions();
     document.getElementById('defaults').addEventListener('click', set_defaults_on_gui);
+
+    let newerOptionsReceived = false;
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes.observatron) {
+            newerOptionsReceived = true;
+            showStoredOptions(changes.observatron.newValue);
+        }
+    });
+    chrome.storage.local.get('observatron').then(({observatron}) => {
+        if (!newerOptionsReceived) showStoredOptions(observatron);
+    }).catch(error => console.error('Error loading options:', error));
 });

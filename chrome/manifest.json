@@ -1,6 +1,6 @@
 {
   "name": "Test Observatron",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Exploratory Testing Tool - Observes browser actions to automatically create logs and screenshots, while you test.",
   "background": {
     "service_worker": "javascript/worker.js"
@@ -19,9 +19,9 @@
     "default_title": "Engage The Observatron"
   },
   "icons": {
-    "16": "icons/red-16x16.png",
-    "48": "icons/red-48x48.png",
-    "128": "icons/red-128x128.png"
+    "16": "icons/split-16x16.png",
+    "48": "icons/split-48x48.png",
+    "128": "icons/split-128x128.png"
   },
   "options_page": "options/options_page.html",
   "devtools_page": "devtools/devtools.html",
@@ -30,6 +30,13 @@
       "js": ["javascript/page_dom_event_messages.js"],
       "run_at": "document_start",
       "matches": ["http://*/*", "https://*/*"]
+    },
+    {
+      "js": ["javascript/inspected_element.js", "javascript/page_selection.js"],
+      "run_at": "document_start",
+      "matches": ["http://*/*", "https://*/*"],
+      "all_frames": true,
+      "match_origin_as_fallback": true
     }
   ],
    "permissions": [
@@ -41,6 +48,7 @@
      "webRequest",
      "contextMenus",
      "sidePanel",
+     "debugger",
      "scripting"
    ],
   "host_permissions": [

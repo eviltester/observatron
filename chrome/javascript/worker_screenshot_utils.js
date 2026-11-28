@@ -1,245 +1,136 @@
 /**
- * Screenshot utility functions for element capture and cropping
+ * Find the visible part of the selected element in the screenshot's page.
  */
-
-// Note: sanitizeRect is available globally via geometry_utils.js import in worker.js
-
-// Export for testing (only in test environment)
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    getUpdatedRect: getUpdatedRect,
-    cropElementScreenshot: cropElementScreenshot
-  };
-}
-
-/**
- * Finds an element by selector and calculates its visible rectangle coordinates
- * @param {string} selector - CSS selector for the target element
- * @param {number} tabId - Chrome tab ID where element is located
- * @param {function} callback - Callback function receiving the calculated rect or null
- */
-function getUpdatedRect(selector, tabId, callback) {
+function getUpdatedRect(selector, tabId, callback, scope) {
   chrome.scripting.executeScript({
-    target: { tabId: tabId },
-    function: (selector) => {
-      try {
-        console.log('Attempting to find element with selector:', selector);
-        if (!selector || selector.trim() === '') {
-          console.warn('Empty or invalid selector provided');
-          return null;
-        }
+    target: scope?.finding ? {tabId, documentIds: [scope.finding.documentId]} : {tabId},
+    func: (selector, scope) => {
+      if (scope && window.location.href !== scope.pageUrl) return null;
 
-        // Try to find element in main document
-        let el = document.querySelector(selector);
-        if (el) {
-          console.log('Element found in main document:', el);
-        } else {
-          // Try to find in iframes
-          console.log('Element not found in main document, checking iframes...');
-          const iframes = document.querySelectorAll('iframe');
-          for (const iframe of iframes) {
-            try {
-              const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-              if (iframeDoc) {
-                el = iframeDoc.querySelector(selector);
-                if (el) {
-                  console.log('Element found in iframe:', el);
-                  break;
-                }
-              }
-            } catch (e) {
-              console.warn('Could not access iframe content:', e);
-            }
-          }
-        }
-
-        if (!el) {
-          console.warn('Element not found with selector:', selector, 'in main document or iframes');
-          return null;
-        }
-
-        // Check if element is still in the DOM and visible
-        if (!document.contains(el) && !Array.from(document.querySelectorAll('iframe')).some(iframe => {
-          try {
-            const doc = iframe.contentDocument || iframe.contentWindow.document;
-            return doc && doc.contains(el);
-          } catch (e) {
-            return false;
-          }
-        })) {
-          console.warn('Element is no longer in the DOM');
-          return null;
-        }
-
-        // Get element position relative to document BEFORE scrolling
-        function getElementPositionRelativeToDocument(element) {
-          let rect = element.getBoundingClientRect();
-          let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-          let scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-
-          return {
-            top: rect.top + scrollTop,
-            left: rect.left + scrollLeft,
-            width: rect.width,
-            height: rect.height
-          };
-        }
-
-        const elementPosition = getElementPositionRelativeToDocument(el);
-        console.log('Element position relative to document:', elementPosition);
-
-        // Scroll element into view to ensure it's visible
-        el.scrollIntoView({ block: 'center', inline: 'center' });
-
-        // Wait a bit for scroll to complete
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            // Now get the element's position relative to the viewport
-            const rect = el.getBoundingClientRect();
-            console.log('Element rect after scrolling:', rect);
-
-            if (!isFinite(rect.left) || !isFinite(rect.top) || !isFinite(rect.width) || !isFinite(rect.height)) {
-              console.warn('Invalid rect for element:', rect);
-              resolve(null);
-              return;
-            }
-
-            if (rect.width <= 0 || rect.height <= 0) {
-              console.warn('Element has zero size:', rect);
-              resolve(null);
-              return;
-            }
-
-            // Ensure element is within viewport bounds
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-
-            // Calculate visible portion of element
-            const visibleRect = {
-              left: Math.max(0, rect.left),
-              top: Math.max(0, rect.top),
-              width: Math.min(viewportWidth - Math.max(0, rect.left), rect.width),
-              height: Math.min(viewportHeight - Math.max(0, rect.top), rect.height)
-            };
-
-            console.log('Visible rect before scaling:', visibleRect);
-
-            if (visibleRect.width <= 0 || visibleRect.height <= 0) {
-              console.warn('Element not visible in viewport:', visibleRect);
-              resolve(null);
-              return;
-            }
-
-            // captureVisibleTab captures the viewport, so use viewport-relative coordinates
-            // The screenshot is already scaled by devicePixelRatio, so we need to account for that
-            const scale = window.devicePixelRatio;
-            const scaledRect = {
-              left: Math.round(visibleRect.left * scale),
-              top: Math.round(visibleRect.top * scale),
-              width: Math.round(visibleRect.width * scale),
-              height: Math.round(visibleRect.height * scale)
-            };
-
-            console.log('Final scaled rect for cropping:', scaledRect);
-            console.log('Device pixel ratio:', scale);
-            console.log('Viewport dimensions:', { width: viewportWidth, height: viewportHeight });
-
-            resolve(scaledRect);
-          }, 300); // Longer delay to ensure scroll completes and element is positioned
-        });
-      } catch (error) {
-        console.error('Error getting element rect:', error);
-        return null;
+      function findElement(doc) {
+        if (!doc || (scope && doc.URL !== scope.elementUrl)) return null;
+        return doc.querySelector(selector);
       }
+
+      let frame;
+      let element;
+      if (scope?.finding) {
+        const {scanId, index} = scope.finding;
+        const scan = globalThis.observatronAccessibilityScan;
+        if (scan?.id !== scanId) return {error: 'This report is out of date. Run the check again.'};
+        element = scan.elements[index]?.deref();
+        if (!element?.isConnected) return {error: 'The reported element is no longer available. Run the check again.'};
+      } else if (scope?.singleMatch) {
+        let matches;
+        try {
+          matches = document.querySelectorAll(selector);
+        } catch {
+          return {error: 'Enter a valid CSS selector.'};
+        }
+        if (!matches.length) return {error: 'The CSS selector did not match any element in the main document.'};
+        if (matches.length > 1) return {error: `The CSS selector matched ${matches.length} elements. Use a selector that matches just one.`};
+        [element] = matches;
+      } else {
+        if (!selector?.trim()) return null;
+        try {
+          if (!scope?.inFrame) element = findElement(document);
+          if (!element && (!scope || scope.inFrame)) {
+            for (const iframe of document.querySelectorAll('iframe')) {
+              const candidate = findElement(iframe.contentDocument);
+              if (!candidate) continue;
+              if (element) return null;
+              frame = iframe;
+              element = candidate;
+              if (!scope) break;
+            }
+          }
+        } catch {
+          return null;
+        }
+      }
+      if (!element?.isConnected) return null;
+      element.scrollIntoView({block: 'center', inline: 'center'});
+
+      return new Promise(resolve => {
+        setTimeout(() => {
+          if (!element.isConnected || (frame && !frame.isConnected) ||
+              (scope && (window.location.href !== scope.pageUrl || element.ownerDocument.URL !== scope.elementUrl)) ||
+              getComputedStyle(element).visibility !== 'visible') {
+            resolve(null);
+            return;
+          }
+
+          const rect = element.getBoundingClientRect();
+          const frameRect = frame?.getBoundingClientRect();
+          const frameLeft = frameRect ? frameRect.left + frame.clientLeft : 0;
+          const frameTop = frameRect ? frameRect.top + frame.clientTop : 0;
+          const frameRight = frame ? frameLeft + frame.clientWidth : window.innerWidth;
+          const frameBottom = frame ? frameTop + frame.clientHeight : window.innerHeight;
+          const left = Math.max(0, frameLeft, frameLeft + rect.left);
+          const top = Math.max(0, frameTop, frameTop + rect.top);
+          const right = Math.min(window.innerWidth, frameRight, frameLeft + rect.right);
+          const bottom = Math.min(window.innerHeight, frameBottom, frameTop + rect.bottom);
+          const scale = window.devicePixelRatio;
+          if (right <= left || bottom <= top) {
+            resolve(null);
+            return;
+          }
+          resolve({
+            left: Math.round(left * scale), top: Math.round(top * scale),
+            width: Math.round((right - left) * scale), height: Math.round((bottom - top) * scale)
+          });
+        }, 300);
+      });
     },
-    args: [selector]
-  }, (results) => {
-    if (chrome.runtime.lastError) {
-      console.warn('Script execution error:', chrome.runtime.lastError);
+    args: scope ? [selector, scope] : [selector]
+  }, results => {
+    const failure = chrome.runtime.lastError;
+    const {result: rect, documentId} = results?.[0] || {};
+    if (failure && scope?.finding) {
+      callback(null, 'The scanned page is no longer available. Run the check again.');
+    } else if (rect?.error) {
+      callback(null, rect.error);
+    } else if (failure || !rect || ![rect.left, rect.top, rect.width, rect.height].every(Number.isFinite)) {
       callback(null);
-      return;
+    } else if (documentId) {
+      callback(sanitizeRect(rect), undefined, documentId);
+    } else {
+      callback(sanitizeRect(rect));
     }
-    if (!results || !results[0]) {
-      console.warn('No script results');
-      callback(null);
-      return;
-    }
-    const result = results[0].result;
-    if (!result || typeof result !== 'object' ||
-        typeof result.left !== 'number' || !isFinite(result.left) ||
-        typeof result.top !== 'number' || !isFinite(result.top) ||
-        typeof result.width !== 'number' || !isFinite(result.width) ||
-        typeof result.height !== 'number' || !isFinite(result.height)) {
-      console.warn('Invalid result from script:', result);
-      callback(null);
-      return;
-    }
-    const sanitized = sanitizeRect(result);
-    console.log('Using sanitized rect for cropping:', sanitized);
-    callback(sanitized);
   });
 }
 
 /**
- * Crops a screenshot image based on provided rectangle coordinates
- * @param {string} dataURL - Base64 encoded screenshot data URL
- * @param {object} rect - Rectangle coordinates {left, top, width, height}
- * @param {number} tabId - Chrome tab ID for script execution
- * @param {function} callback - Callback function receiving cropped data URL or null
+ * Crop the supplied image in an isolated world in the target tab.
  */
-function cropElementScreenshot(dataURL, rect, tabId, callback) {
-  chrome.storage.local.set({tempDataURL: dataURL}, () => {
-    chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      function: (left, top, width, height) => {
-        return new Promise((resolve) => {
-          chrome.storage.local.get(['tempDataURL'], (result) => {
-            const dataURL = result.tempDataURL;
-            chrome.storage.local.remove('tempDataURL');
-            const w = Math.max(1, Math.floor(width));
-            const h = Math.max(1, Math.floor(height));
-            if (w <= 0 || h <= 0) {
-              resolve(dataURL);
-              return;
-            }
-            const img = new Image();
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              canvas.width = w;
-              canvas.height = h;
+function cropElementScreenshot(dataURL, rect, tabId, callback, documentId) {
+  chrome.scripting.executeScript({
+    target: documentId ? {tabId, documentIds: [documentId]} : {tabId},
+    func: (dataURL, left, top, width, height) => new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const cropLeft = Math.max(0, Math.floor(left));
+        const cropTop = Math.max(0, Math.floor(top));
+        const cropWidth = Math.min(img.width - cropLeft, Math.floor(width));
+        const cropHeight = Math.min(img.height - cropTop, Math.floor(height));
+        if (cropWidth <= 0 || cropHeight <= 0) {
+          resolve(null);
+          return;
+        }
 
-              // Validate and adjust crop coordinates
-              const imgWidth = img.width;
-              const imgHeight = img.height;
-              const validatedRect = {
-                left: Math.max(0, Math.min(left, imgWidth)),
-                top: Math.max(0, Math.min(top, imgHeight)),
-                width: Math.max(1, Math.min(width, imgWidth - Math.max(0, left))),
-                height: Math.max(1, Math.min(height, imgHeight - Math.max(0, top)))
-              };
+        const canvas = document.createElement('canvas');
+        canvas.width = cropWidth;
+        canvas.height = cropHeight;
+        canvas.getContext('2d').drawImage(img, cropLeft, cropTop, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataURL;
+    }),
+    args: [dataURL, rect.left, rect.top, rect.width, rect.height]
+  }, results => callback(chrome.runtime.lastError ? null : results?.[0]?.result || null));
+}
 
-              // Ensure the crop area is valid
-              if (validatedRect.width <= 0 || validatedRect.height <= 0) {
-                resolve(dataURL); // Return original if crop area is invalid
-                return;
-              }
-
-              console.log('Cropping with validated rect:', validatedRect, 'from image size:', { width: imgWidth, height: imgHeight });
-
-              ctx.drawImage(img, validatedRect.left, validatedRect.top, validatedRect.width, validatedRect.height, 0, 0, w, h);
-              resolve(canvas.toDataURL('image/png'));
-            };
-            img.onerror = () => {
-              resolve(dataURL);
-            };
-            img.src = dataURL;
-          });
-        });
-      },
-      args: [rect.left, rect.top, rect.width, rect.height]
-    }, (results) => {
-      callback(results && results[0] && results[0].result ? results[0].result : null);
-    });
-  });
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {getUpdatedRect, cropElementScreenshot};
 }

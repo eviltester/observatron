@@ -1,5 +1,51 @@
 'use strict';
 
+const showPanelView = (() => {
+    const tabs = [...document.querySelectorAll('#sidepanel-tabs [role="tab"]')];
+    // Move the existing controls so the focused views share their state and handlers.
+    const sharedControls = [...document.querySelectorAll('[data-focused-panel]')].map(control => {
+        const home = document.createComment('Shared control position');
+        control.before(home);
+        return {control, home, panelId: control.dataset.focusedPanel};
+    });
+    let leavingOptions = false;
+
+    async function selectPanelTab(selected) {
+        const current = tabs.find(tab => tab.getAttribute('aria-selected') === 'true');
+        if (current === selected) return true;
+        if (leavingOptions) return false;
+        if (current.id === 'options-tab' && typeof saveOptionsOnLeave === 'function') {
+            leavingOptions = true;
+            try {
+                if (!await saveOptionsOnLeave()) {
+                    current.focus();
+                    window.scrollTo(0, 0);
+                    return false;
+                }
+            } finally {
+                leavingOptions = false;
+            }
+        }
+        const panel = document.getElementById(selected.getAttribute('aria-controls'));
+        for (const {control, home, panelId} of sharedControls) {
+            if (panelId === panel.id) panel.append(control);
+            else if (control.previousSibling !== home) home.after(control);
+        }
+        for (const tab of tabs) {
+            const active = tab === selected;
+            tab.setAttribute('aria-selected', String(active));
+            tab.tabIndex = active ? 0 : -1;
+            document.getElementById(tab.getAttribute('aria-controls')).hidden = !active;
+        }
+        window.scrollTo(0, 0);
+        selected.focus({preventScroll: true});
+        return true;
+    }
+
+    bindTabNavigation(tabs, selectPanelTab);
+    return id => selectPanelTab(document.getElementById(id));
+})();
+
 function appendToNoteDraft(text) {
     const draft = document.getElementById('noteText');
     draft.value = draft.value ? `${draft.value}\n\n${text}` : text;
@@ -7,161 +53,524 @@ function appendToNoteDraft(text) {
     draft.setSelectionRange(draft.value.length, draft.value.length);
 }
 
-document.getElementById('saveNote').addEventListener('click', function() {
-    const noteText = document.getElementById('noteText').value;
-    const withScreenshot = document.getElementById('withScreenshot').checked;
-    const withElementScreenshot = document.getElementById('withElementScreenshot').checked;
+function focusPanelTop() {
+    window.scrollTo(0, 0);
+    document.querySelector('#sidepanel-tabs [aria-selected="true"]').focus({preventScroll: true});
+}
 
-    if (noteText.trim()) {
-        // Get the current tab ID for element screenshots
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            const currentTabId = tabs[0] ? tabs[0].id : null;
+const panelInspectedTabId = chrome.devtools?.inspectedWindow?.tabId;
+const devtoolsPageUrl = chrome.runtime.getURL('devtools/devtools.html');
+const elementActionButtons = document.querySelectorAll('button[data-element-source]');
+const panelActionsInProgress = new Set();
+const clickedElementPorts = new Map();
+let clickedElementUpdate = 0;
+let elementDevtoolsChannel;
+let elementDevtoolsPort;
+let targetPageUpdate = 0;
+let shownTargetTabId;
+let shownTargetWindowId;
+let shownPanelTab;
+const panelTargetObservers = new Set();
+const targetPageLink = document.getElementById('target-page-url');
+const targetPageCopy = document.getElementById('copy-target-page-url');
+const targetPageNote = document.getElementById('create-target-page-note');
+const targetPageCopyFeedback = document.getElementById('target-page-copy-feedback');
+let targetPageCopyTimer;
 
-            // Send message to background script
-            chrome.runtime.sendMessage({
-                method: 'saveNote',
-                noteText: noteText,
-                withScreenshot: withScreenshot,
-                withElementScreenshot: withElementScreenshot,
-                tabId: currentTabId
-            }, function(response) {
-                if (chrome.runtime.lastError) {
-                    console.warn("Failed to save note:", chrome.runtime.lastError.message);
-                } else {
-                    // Clear the textarea after saving
-                    document.getElementById('noteText').value = '';
-                    // Notes will be re-rendered via storage change listener
-                }
-            });
+function mostRecentClick(clicks) {
+    return clicks.reduce((latest, click) => Number.isFinite(click?.time) &&
+        (!latest || click.time > latest.time) ? click : latest, null);
+}
+
+function updateElementActionButtons() {
+    const last = mostRecentClick(Array.from(clickedElementPorts.values(), entry => entry.click));
+    const availability = {
+        active: Boolean(last?.available),
+        selected: panelInspectedTabId !== undefined || Boolean(elementDevtoolsPort)
+    };
+    for (const button of elementActionButtons) {
+        button.disabled = panelActionsInProgress.has(button) || !availability[button.dataset.elementSource];
+    }
+}
+
+async function activePageFrames(tabId) {
+    const frames = await chrome.webNavigation.getAllFrames({tabId});
+    return (frames || []).filter(frame => frame.documentId &&
+        (!frame.documentLifecycle || frame.documentLifecycle === 'active'));
+}
+
+async function syncClickedElementPorts(tabId, refresh = false) {
+    const update = ++clickedElementUpdate;
+    if (refresh) {
+        for (const {port} of clickedElementPorts.values()) {
+            try {
+                port.postMessage('refresh');
+            } catch {
+                // Navigation can close a document's port before onDisconnect runs.
+            }
+        }
+    }
+    const frames = await activePageFrames(tabId).catch(() => []);
+    if (update !== clickedElementUpdate || tabId !== shownTargetTabId) return;
+
+    const documents = new Set(frames.map(frame => frame.documentId));
+    for (const [documentId, entry] of clickedElementPorts) {
+        if (!documents.has(documentId)) {
+            clickedElementPorts.delete(documentId);
+            entry.port.disconnect();
+        }
+    }
+    for (const documentId of documents) {
+        if (clickedElementPorts.has(documentId)) continue;
+        const port = chrome.tabs.connect(tabId, {name: 'observatron-element-click', documentId});
+        const entry = {port, click: null};
+        clickedElementPorts.set(documentId, entry);
+        port.onMessage.addListener(click => {
+            if (clickedElementPorts.get(documentId) !== entry) return;
+            entry.click = click;
+            updateElementActionButtons();
+        });
+        port.onDisconnect.addListener(() => {
+            void chrome.runtime.lastError;
+            if (clickedElementPorts.get(documentId) !== entry) return;
+            clickedElementPorts.delete(documentId);
+            updateElementActionButtons();
         });
     }
-});
+    updateElementActionButtons();
+}
 
-document.getElementById('cancelNote').addEventListener('click', function() {
-    const noteText = document.getElementById('noteText');
-    noteText.value="";
-});
+function requestElementDevtoolsStatus() {
+    void chrome.runtime.sendMessage({
+        type: 'observatronTrackElementDevtools', tabId: shownTargetTabId, channel: elementDevtoolsChannel
+    }).catch(() => {});
+}
 
-document.getElementById('takeScreenshot').addEventListener('click', function() {
-    // Send message to background script
-    chrome.runtime.sendMessage({
-        method: 'takeScreenshot'
-    }, function(response) {
-        if (chrome.runtime.lastError) {
-            // Only log unexpected errors, ignore expected message port closure
-            if (!chrome.runtime.lastError.message.includes('message port closed')) {
-                console.warn("Failed to take screenshot:", chrome.runtime.lastError.message);
-            }
+if (panelInspectedTabId === undefined) {
+    chrome.runtime.onConnect.addListener(port => {
+        if (port.name !== elementDevtoolsChannel || port.sender?.url !== devtoolsPageUrl) return;
+        if (elementDevtoolsPort) {
+            port.disconnect();
+            return;
         }
+        elementDevtoolsPort = port;
+        updateElementActionButtons();
+        port.onDisconnect.addListener(() => {
+            void chrome.runtime.lastError;
+            if (elementDevtoolsPort !== port) return;
+            elementDevtoolsPort = undefined;
+            updateElementActionButtons();
+        });
     });
-});
-
-document.getElementById('savePage').addEventListener('click', function() {
-    // Send message to background script
-    chrome.runtime.sendMessage({
-        method: 'savePage'
-    }, function(response) {
-        if (chrome.runtime.lastError) {
-            // Only log unexpected errors, ignore expected message port closure
-            if (!chrome.runtime.lastError.message.includes('message port closed')) {
-                console.warn("Failed to savePage:", chrome.runtime.lastError.message);
-            }
+    chrome.runtime.onMessage.addListener((request, sender) => {
+        if (request.type === 'observatronFocusSidePanel' && sender.url === chrome.runtime.getURL('javascript/worker.js') &&
+            request.tabId === shownTargetTabId) {
+            focusPanelTop();
         }
-    });
-});
-
-document.getElementById('checkBrokenLinks').addEventListener('click', function() {
-    // Get checked hashes from storage
-    chrome.storage.session.get(['brokenLinkHashes'], function(result) {
-        const checkedHashes = result.brokenLinkHashes || [];
-        // Get the current tab and send message to content script
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            const currentTabId = tabs[0] ? tabs[0].id : null;
-            if (currentTabId) {
-                chrome.tabs.sendMessage(currentTabId, {method: 'scanBrokenLinks', checkedHashes: checkedHashes, manual: true}, function(response) {
-                    if (chrome.runtime.lastError) {
-                        if (!chrome.runtime.lastError.message.includes('message port closed')) {
-                            console.warn("Failed to scan broken links:", chrome.runtime.lastError.message);
-                        }
-                        return;
-                    }
-                    // No response expected
-                });
-            }
-        });
-    });
-});
-
-document.getElementById('checkBrokenImages').addEventListener('click', function() {
-    // Get checked hashes from storage
-    chrome.storage.session.get(['brokenImageHashes'], function(result) {
-        const checkedHashes = result.brokenImageHashes || [];
-        // Get the current tab and send message to content script
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            const currentTabId = tabs[0] ? tabs[0].id : null;
-            if (currentTabId) {
-                chrome.tabs.sendMessage(currentTabId, {method: 'scanBrokenImages', checkedHashes: checkedHashes, manual: true}, function(response) {
-                    if (chrome.runtime.lastError) {
-                        if (!chrome.runtime.lastError.message.includes('message port closed')) {
-                            console.warn("Failed to scan broken images:", chrome.runtime.lastError.message);
-                        }
-                        return;
-                    }
-                    // No response expected
-                });
-            }
-        });
-    });
-});
-
-document.getElementById('takeElementScreenshot').addEventListener('click', function() {
-    // Get the current tab ID for element screenshots
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-        const currentTabId = tabs[0] ? tabs[0].id : null;
-
-        // Send message to background script
-        chrome.runtime.sendMessage({
-            method: 'takeElementScreenshot',
-            tabId: currentTabId
-        }, function(response) {
-            if (chrome.runtime.lastError) {
-                // Only log unexpected errors, ignore expected message port closure
-                if (!chrome.runtime.lastError.message.includes('message port closed')) {
-                    console.warn("Failed to take element screenshot:", chrome.runtime.lastError.message);
-                }
-            }
-        });
-    });
-});
-
-document.getElementById('addSelectedElement').addEventListener('click', function() {
-    // Update element data first
-    chrome.runtime.sendMessage({type: 'updateElementData'});
-    setTimeout(() => {
-        addElementToNote();
-    }, 100);
-});
-
-
-
-function addElementToNote() {
-    // Get selected element from storage
-    chrome.storage.local.get(['selectedElement'], function(result) {
-        const element = result.selectedElement;
-        if (element) {
-            // Format as markdown and description
-            const markdown = `\`\`\`html\n${element.outerHTML}\n\`\`\``;
-            const xpath = `CSS Selector: ${element.selector}`;
-            const description = element.description;
-
-            const currentText = document.getElementById('noteText').value;
-            const newText = currentText ? currentText + '\n\n' + markdown + '\n\n' + xpath + '\n\n' + description : markdown + '\n\n' + xpath + '\n\n' + description;
-            document.getElementById('noteText').value = newText;
-        } else {
-            alert("No element selected in Elements panel.");
+        if (request.type === 'observatronElementDevtoolsReady' && sender.url === devtoolsPageUrl &&
+            request.tabId === shownTargetTabId && elementDevtoolsChannel) {
+            requestElementDevtoolsStatus();
         }
     });
 }
+
+function setElementActionTarget(tabId) {
+    if (shownTargetTabId === tabId) return;
+    shownTargetTabId = tabId;
+    ++clickedElementUpdate;
+    const oldPorts = [...clickedElementPorts.values()];
+    clickedElementPorts.clear();
+    for (const {port} of oldPorts) port.disconnect();
+    const oldDevtoolsPort = elementDevtoolsPort;
+    elementDevtoolsPort = undefined;
+    elementDevtoolsChannel = undefined;
+    oldDevtoolsPort?.disconnect();
+    updateElementActionButtons();
+    if (panelInspectedTabId === undefined && tabId !== undefined) {
+        elementDevtoolsChannel = `observatron-element-devtools:${crypto.randomUUID()}`;
+        requestElementDevtoolsStatus();
+    }
+}
+
+async function getPanelTab() {
+    if (panelInspectedTabId !== undefined) return chrome.tabs.get(panelInspectedTabId);
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    return tab;
+}
+
+async function refreshPanelTarget() {
+    const update = ++targetPageUpdate;
+    const tab = await getPanelTab().catch(() => undefined);
+    if (update !== targetPageUpdate) return;
+    shownTargetWindowId = tab?.windowId;
+    setElementActionTarget(tab?.id);
+    const targetChanged = tab?.id !== shownPanelTab?.id || tab?.url !== shownPanelTab?.url;
+    shownPanelTab = tab;
+    renderTargetPageUrl(tab?.url);
+    if (targetChanged) for (const observer of panelTargetObservers) observer(tab);
+    if (tab) void syncClickedElementPorts(tab.id, true);
+}
+
+function renderTargetPageUrl(url) {
+    const suffix = url?.search(/[?#]/) ?? -1;
+    targetPageLink.textContent = !url ? 'Page URL unavailable' : suffix === -1 ? url : `${url.slice(0, suffix + 1)}…`;
+    targetPageLink.title = url || '';
+    if (/^https?:\/\//i.test(url || '')) targetPageLink.href = url;
+    else targetPageLink.removeAttribute('href');
+    targetPageCopy.disabled = !url;
+    targetPageNote.disabled = !url;
+}
+
+function watchPanelPageReport(reportKey, render, select = (report, tab) => report?.url === tab?.url ? report : undefined) {
+    let key;
+    let target;
+    let revision = 0;
+
+    function applyReport(report) {
+        ++revision;
+        render(select(report, target));
+    }
+
+    function watchTarget(tab) {
+        key = tab ? reportKey(tab.id) : undefined;
+        target = tab;
+        applyReport();
+        if (!key) return;
+        const expected = revision;
+        const requestedKey = key;
+        chrome.storage.session.get(requestedKey).then(result => {
+            if (expected === revision) applyReport(result[requestedKey]);
+        }).catch(() => {});
+    }
+
+    panelTargetObservers.add(watchTarget);
+    if (shownPanelTab) watchTarget(shownPanelTab);
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'session' && key && changes[key]) applyReport(changes[key].newValue);
+    });
+
+    return {
+        async save(tab, report) {
+            const destination = reportKey(tab.id);
+            const expected = revision;
+            await chrome.storage.session.set({[destination]: report});
+            if (expected === revision && key === destination && target?.url === report.url) applyReport(report);
+        },
+        async clear() {
+            applyReport();
+            if (key) await chrome.storage.session.remove(key);
+        }
+    };
+}
+
+document.getElementById('target-page-label').textContent = panelInspectedTabId === undefined ? 'Active Page:' : 'Inspected Page:';
+if (panelInspectedTabId === undefined) {
+    chrome.tabs.onActivated.addListener(({tabId, windowId}) => {
+        if (shownTargetWindowId !== undefined && windowId !== shownTargetWindowId) return;
+        if (tabId !== shownTargetTabId) setElementActionTarget(undefined);
+        void refreshPanelTarget();
+    });
+}
+chrome.tabs.onUpdated.addListener((tabId, change) => {
+    if (change.url !== undefined && tabId === (panelInspectedTabId ?? shownTargetTabId)) void refreshPanelTarget();
+});
+chrome.tabs.onRemoved.addListener(tabId => {
+    if (tabId === shownTargetTabId) void refreshPanelTarget();
+});
+for (const event of [chrome.webNavigation.onCommitted, chrome.webNavigation.onDOMContentLoaded]) {
+    event.addListener(({tabId}) => {
+        if (tabId === shownTargetTabId) void syncClickedElementPorts(tabId);
+    });
+}
+for (const event of [chrome.webNavigation.onHistoryStateUpdated, chrome.webNavigation.onReferenceFragmentUpdated]) {
+    event.addListener(({tabId}) => {
+        if (tabId === shownTargetTabId) void syncClickedElementPorts(tabId, true);
+    });
+}
+void refreshPanelTarget();
+
+const panelActionWarnings = new WeakMap();
+
+function warningForAction(button) {
+    const anchor = button.closest('[data-action-group]') || button;
+    if (panelActionWarnings.has(anchor)) return panelActionWarnings.get(anchor);
+
+    const template = document.getElementById('panel-action-warning-template');
+    const warning = template.content.firstElementChild.cloneNode(true);
+    const message = warning.querySelector('[role="alert"]');
+    const dismiss = warning.querySelector('button');
+    let timeout;
+    function clearWarning() {
+        clearTimeout(timeout);
+        warning.hidden = true;
+        message.textContent = '';
+    }
+    function showWarning(text) {
+        clearTimeout(timeout);
+        warning.hidden = false;
+        message.textContent = text;
+        timeout = setTimeout(clearWarning, 15000);
+    }
+    dismiss.addEventListener('click', clearWarning);
+    anchor.after(warning);
+    const controls = {clearWarning, showWarning};
+    panelActionWarnings.set(anchor, controls);
+    return controls;
+}
+
+function registerPanelAction(control, action) {
+    const button = typeof control === 'string' ? document.getElementById(control) : control;
+    const form = button.type === 'submit' ? button.form : null;
+    const hasElementSource = Boolean(button.dataset.elementSource);
+    const {clearWarning, showWarning} = warningForAction(button);
+    (form || button).addEventListener(form ? 'submit' : 'click', async event => {
+        if (form) event.preventDefault();
+        if (button.disabled) return;
+        button.disabled = true;
+        if (hasElementSource) panelActionsInProgress.add(button);
+        clearWarning();
+        try {
+            const warning = await action();
+            if (typeof warning === 'string') showWarning(warning);
+        } catch (error) {
+            showWarning(error.message);
+        } finally {
+            if (hasElementSource) {
+                panelActionsInProgress.delete(button);
+                updateElementActionButtons();
+            } else {
+                button.disabled = false;
+            }
+        }
+    });
+}
+
+{
+    const start = document.getElementById('start-observing');
+    const stop = document.getElementById('stop-observing');
+    const icon = document.getElementById('observation-icon');
+    const status = document.getElementById('observation-status');
+    const {clearWarning, showWarning} = warningForAction(start);
+    let domain;
+    let changing = false;
+
+    function updateControls() {
+        const canObserve = /^https?:\/\//i.test(shownPanelTab?.url || '');
+        icon.src = domain ? '../icons/green.png' : '../icons/red.png';
+        status.textContent = domain ? `Observing ${domain}` : domain === null ? 'Observation stopped' : 'Checking observation status…';
+        start.disabled = changing || domain !== null || !canObserve;
+        stop.disabled = changing || !domain;
+    }
+
+    async function changeObservationFromPanel(action) {
+        changing = true;
+        clearWarning();
+        updateControls();
+        try {
+            const tab = action === 'start' ? await requirePanelTab() : undefined;
+            await sendPanelAction('changeObservation', tab, {action});
+        } catch (error) {
+            showWarning(error.message);
+        } finally {
+            changing = false;
+            updateControls();
+        }
+    }
+
+    start.addEventListener('click', () => changeObservationFromPanel('start'));
+    stop.addEventListener('click', () => changeObservationFromPanel('stop'));
+    panelTargetObservers.add(updateControls);
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes.observatronEngagedDomain) {
+            domain = changes.observatronEngagedDomain.newValue || null;
+            updateControls();
+        }
+    });
+    chrome.storage.local.get('observatronEngagedDomain').then(({observatronEngagedDomain}) => {
+        if (domain === undefined) domain = observatronEngagedDomain || null;
+        updateControls();
+    }).catch(error => {
+        if (domain === undefined) status.textContent = 'Observation status unavailable';
+        showWarning(error.message);
+    });
+}
+
+const targetPageWarning = warningForAction(targetPageCopy);
+targetPageCopy.addEventListener('click', async () => {
+    const url = shownPanelTab?.url;
+    if (!url) return;
+    targetPageWarning.clearWarning();
+    clearTimeout(targetPageCopyTimer);
+    targetPageCopyFeedback.textContent = '';
+    try {
+        await navigator.clipboard.writeText(url);
+        targetPageCopyFeedback.textContent = 'Copied';
+        targetPageCopyTimer = setTimeout(() => { targetPageCopyFeedback.textContent = ''; }, 2000);
+    } catch (error) {
+        targetPageWarning.showWarning(`Could not copy the page URL. ${error.message}`);
+    }
+});
+
+targetPageNote.addEventListener('click', async () => {
+    const url = shownPanelTab?.url;
+    if (url && await showPanelView('notes-tab')) appendToNoteDraft(url);
+});
+
+async function requirePanelTab() {
+    const tab = await getPanelTab();
+    if (!Number.isInteger(tab?.id)) throw new Error('Open a page to use this action.');
+    return tab;
+}
+
+async function selectedElementForPanel(tab) {
+    let element;
+    if (panelInspectedTabId !== undefined) {
+        element = await readInspectedElement();
+    } else {
+        let response;
+        try {
+            response = await chrome.runtime.sendMessage({type: 'observatronReadSelectedElement', tabId: tab.id});
+        } catch {
+            // There is no DevTools selection listener for this tab.
+        }
+        if (!response) throw new Error(elementDevtoolsPort
+            ? 'DevTools did not return a selection. Select an element in Elements and try again.'
+            : 'Open DevTools on this page and select an element in Elements.');
+        if (response.error) throw new Error(response.error);
+        element = response.element;
+    }
+
+    await verifyPanelElementTarget(tab, element);
+    if (!element) throw new Error('Select an element in DevTools → Elements on this page.');
+    return element;
+}
+
+async function verifyPanelElementTarget(tab, element) {
+    const current = await getPanelTab();
+    if (current?.id !== tab.id || current.url !== tab.url ||
+        (current.pendingUrl && current.pendingUrl !== tab.url) || (element && element.pageUrl !== tab.url)) {
+        throw new Error('The target page changed. Select the element again on the current page.');
+    }
+}
+
+async function activeElementForPanel(tab) {
+    if (!/^https?:\/\//i.test(tab.url || '')) throw new Error('Open an HTTP or HTTPS page and click an element first.');
+
+    const frames = await activePageFrames(tab.id);
+    const getClick = (frame, time) => chrome.tabs.sendMessage(tab.id, {
+        type: 'observatronClickedElement', pageUrl: tab.url, time
+    }, {documentId: frame.documentId}).catch(() => undefined);
+    const replies = (await Promise.all(frames.map(async frame => {
+        const click = await getClick(frame);
+        return click && {...click, frame};
+    }))).filter(Boolean);
+    const last = mostRecentClick(replies);
+    if (!last) {
+        if (!replies.length) throw new Error('Reload the target page, then click the element and try again.');
+        throw new Error('Click an element on the target page, then try again.');
+    }
+    const element = (await getClick(last.frame, last.time))?.element;
+    await verifyPanelElementTarget(tab, element);
+    if (!element) throw new Error('The clicked element changed. Click it again and retry.');
+    return element;
+}
+
+async function sendPanelAction(method, tab, details = {}) {
+    const noResponse = method === 'capturePanelElementScreenshot'
+        ? 'Observatron did not confirm the element screenshot. Reload the extension and try again.' : undefined;
+    const response = await chrome.runtime.sendMessage({method, tabId: tab?.id, pageUrl: tab?.url, ...details})
+        .catch(error => { throw new Error(noResponse || error.message); });
+    if (!response?.success) throw new Error(response?.error || noResponse || 'Observatron could not complete this action.');
+    return response;
+}
+
+const includeNoteElementScreenshot = document.getElementById('withElementScreenshot');
+const noteScreenshotSource = document.getElementById('note-screenshot-source');
+const noteScreenshotSourceSetting = document.getElementById('note-screenshot-source-setting');
+includeNoteElementScreenshot.addEventListener('change', () => {
+    noteScreenshotSourceSetting.hidden = !includeNoteElementScreenshot.checked;
+    if (includeNoteElementScreenshot.checked) {
+        const active = document.getElementById('addActiveElement');
+        const selected = document.getElementById('addSelectedElement');
+        noteScreenshotSource.value = (panelInspectedTabId !== undefined || (active.disabled && !selected.disabled))
+            ? 'selected' : 'active';
+    }
+});
+
+registerPanelAction('saveNote', async () => {
+    const draft = document.getElementById('noteText');
+    const noteText = draft.value;
+    if (!noteText.trim()) return;
+
+    const withScreenshot = document.getElementById('withScreenshot').checked;
+    const withElementScreenshot = includeNoteElementScreenshot.checked;
+    const warnings = [];
+    let tab;
+    let element;
+    if (withScreenshot || withElementScreenshot) {
+        try {
+            tab = await requirePanelTab();
+        } catch (error) {
+            warnings.push(`Could not attach the requested screenshot. ${error.message}`);
+        }
+    }
+    if (tab && withElementScreenshot) {
+        const readElement = noteScreenshotSource.value === 'selected' ? selectedElementForPanel : activeElementForPanel;
+        try {
+            element = await readElement(tab);
+        } catch (error) {
+            warnings.push(`Could not attach the element screenshot. ${error.message}`);
+        }
+    }
+    const capturePageScreenshot = Boolean(tab && withScreenshot);
+    const {attachmentErrors} = await sendPanelAction('saveNote', tab, {noteText, capturePageScreenshot, element});
+    if (draft.value === noteText) draft.value = '';
+    if (Array.isArray(attachmentErrors)) warnings.push(...attachmentErrors);
+    else if (capturePageScreenshot || element) warnings.push('Observatron did not confirm the screenshot. Reload the extension before capturing again.');
+    if (warnings.length) return `Note saved. ${warnings.join(' ')}`;
+});
+
+document.getElementById('cancelNote').addEventListener('click', () => {
+    document.getElementById('noteText').value = '';
+});
+
+registerPanelAction('takeScreenshot', async () => sendPanelAction('takeScreenshot', await requirePanelTab()));
+registerPanelAction('savePage', async () => sendPanelAction('savePage', await requirePanelTab()));
+
+for (const [buttonId, readElement] of [
+    ['takeActiveElementScreenshot', activeElementForPanel],
+    ['takeElementScreenshot', selectedElementForPanel]
+]) {
+    registerPanelAction(buttonId, async () => {
+        const tab = await requirePanelTab();
+        const element = await readElement(tab);
+        await sendPanelAction('capturePanelElementScreenshot', tab, {element});
+    });
+}
+
+registerPanelAction('takeSelectorScreenshot', async () => {
+    const selector = document.getElementById('element-screenshot-selector').value.trim();
+    if (!selector) throw new Error('Enter a CSS selector.');
+    const tab = await requirePanelTab();
+    await sendPanelAction('capturePanelElementScreenshot', tab, {
+        element: {selector, pageUrl: tab.url, elementUrl: tab.url, singleMatch: true}
+    });
+});
+
+function addElementToDraft(element) {
+    const source = ['Page: ' + element.pageUrl];
+    if (element.inFrame) source.push('Frame: ' + element.elementUrl);
+    const html = ['```html', element.outerHTML, '```'].join('\n');
+    appendToNoteDraft([source.join('\n'), html, 'CSS Selector: ' + element.selector, element.description].join('\n\n'));
+}
+
+registerPanelAction('addSelectedElement', async () => {
+    addElementToDraft(await selectedElementForPanel(await requirePanelTab()));
+});
+
+registerPanelAction('addActiveElement', async () => {
+    addElementToDraft(await activeElementForPanel(await requirePanelTab()));
+});
 
 // Session name functionality
 function loadSessionName() {
@@ -247,8 +656,7 @@ document.getElementById('cancelSessionEdit').addEventListener('click', function(
     document.getElementById('sessionEdit').style.display = 'none';
 });
 
-// Focus on textarea when page loads
-document.getElementById('noteText').focus();
+focusPanelTop();
 
 // Notes collection functionality
 let allNotes = [];
@@ -266,17 +674,17 @@ function populateTypeFilter() {
     const currentValue = typeFilter.value;
 
     // Clear existing options except the first 5 (all, note, question, todo, bug)
-    while (typeFilter.options.length > 5) {
-        typeFilter.remove(5);
+    const standardOptionCount = standardNoteTypes.length + 1;
+    while (typeFilter.options.length > standardOptionCount) {
+        typeFilter.remove(standardOptionCount);
     }
 
     // Get unique display types (remove [] suffix for display)
-    const standardTypes = ['note', 'question', 'todo', 'bug'];
     const displayTypes = new Set();
 
     allNotes.forEach(note => {
         const displayType = note.type.endsWith('[]') ? note.type.slice(0, -2) : note.type;
-        if (!standardTypes.includes(displayType)) {
+        if (!standardNoteTypes.includes(displayType)) {
             displayTypes.add(displayType);
         }
     });
@@ -384,7 +792,7 @@ function renderNotes(notes) {
         timestampSpan.style.color = '#666';
 
         // Only show status button for certain note types
-        const showStatusButton = ['question', 'todo', 'bug'].includes(note.type) || note.type.endsWith('[]');
+        const showStatusButton = isClosableNoteType(note.type);
 
         noteDiv.appendChild(typeSpan);
         noteDiv.appendChild(textSpan);
@@ -432,6 +840,8 @@ function renderNotes(notes) {
 
         noteDiv.appendChild(timestampSpan);
 
+        if (note.status === 'open' && note.type !== 'note') addNoteTypeEditor(noteDiv, note);
+
         // Style based on status - for 'note' type, always treat as closed
         const effectiveStatus = note.type === 'note' ? 'closed' : note.status;
         if (effectiveStatus === 'closed') {
@@ -442,44 +852,110 @@ function renderNotes(notes) {
     });
 }
 
-function toggleNoteStatus(noteId) {
+function addNoteTypeEditor(noteDiv, note) {
+    const change = document.createElement('button');
+    change.type = 'button';
+    change.textContent = 'Change Type';
+    const form = document.createElement('form');
+    form.className = 'note-type-editor';
+    form.hidden = true;
+
+    const label = document.createElement('label');
+    const type = document.createElement('select');
+    const existing = new Set(allNotes.map(item => item.type));
+    const builtIn = {note: 'Note', question: 'Question', todo: 'To-do', bug: 'Bug'};
+    for (const value of [...standardNoteTypes, ...[...existing].filter(value => !standardNoteTypes.includes(value)).sort()]) {
+        const name = Object.hasOwn(builtIn, value) ? builtIn[value]
+            : value.endsWith('[]') ? `${value.slice(0, -2)} (open/close)` : value;
+        type.add(new Option(name + (isClosableNoteType(value) ? '' : ' (closes note)'), value));
+    }
+    type.add(new Option('Custom type…', ''));
+    type.value = note.type;
+    label.append('Type ', type);
+
+    const customLabel = document.createElement('label');
+    const custom = document.createElement('input');
+    custom.maxLength = 18;
+    custom.placeholder = 'e.g. task[]';
+    custom.required = true;
+    customLabel.append('Custom type ', custom, ' Use [] to keep the note open.');
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.textContent = 'Save Type';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Cancel';
+    const error = document.createElement('p');
+    error.className = 'note-edit-error';
+    error.setAttribute('role', 'alert');
+    form.append(label, customLabel, save, cancel, error);
+
+    function showCustomInput() {
+        const useCustomType = type.value === '';
+        custom.disabled = !useCustomType;
+        customLabel.hidden = !useCustomType;
+    }
+
+    change.addEventListener('click', () => {
+        form.hidden = false;
+        change.hidden = true;
+        type.focus();
+    });
+    type.addEventListener('change', showCustomInput);
+    cancel.addEventListener('click', () => {
+        form.reset();
+        type.value = note.type;
+        showCustomInput();
+        error.textContent = '';
+        form.hidden = true;
+        change.hidden = false;
+        change.focus();
+    });
+    form.addEventListener('submit', async event => {
+        event.preventDefault();
+        save.disabled = true;
+        error.textContent = '';
+        try {
+            const customType = type.value === '';
+            if (type.value === note.type) {
+                cancel.click();
+                return;
+            }
+            await sendPanelAction('changeNoteType', undefined, {noteId: note.id, noteType: customType ? custom.value : type.value, customType});
+            if (form.isConnected) cancel.click();
+        } catch (failure) {
+            error.textContent = failure.message;
+        } finally {
+            save.disabled = false;
+        }
+    });
+    showCustomInput();
+    noteDiv.append(change, form);
+}
+
+async function toggleNoteStatus(noteId) {
     const noteDiv = document.querySelector(`[data-note-id="${noteId}"]`);
-    if (!noteDiv) return;
+    const note = allNotes.find(item => item.id === noteId);
+    if (!noteDiv || !note || !isClosableNoteType(note.type)) return;
 
     const existingInput = noteDiv.querySelector('.closing-note-input');
-    if (existingInput) {
-        // Confirm close with the entered text
-        const closingNote = existingInput.value.trim();
-        chrome.storage.local.get(['observatron_notes'], function(result) {
-            const notes = result.observatron_notes || [];
-            const note = notes.find(n => n.id === noteId);
-            if (note) {
-                note.closingNote = closingNote || undefined;
-                note.status = 'closed';
-                chrome.storage.local.set({observatron_notes: notes}, function() {
-                    loadNotes(); // Re-render
-                });
-            }
-        });
-    } else {
-        // Check if we're opening or closing
-        chrome.storage.local.get(['observatron_notes'], function(result) {
-            const notes = result.observatron_notes || [];
-            const note = notes.find(n => n.id === noteId);
-            if (note && note.type !== 'note') {
-                if (note.status === 'open') {
-                    // Closing - show input
-                    showClosingNoteInput(noteId);
-                } else {
-                    // Opening - clear closing note and update status
-                    note.status = 'open';
-                    // Keep closingNote for potential re-closing
-                    chrome.storage.local.set({observatron_notes: notes}, function() {
-                        loadNotes(); // Re-render
-                    });
-                }
-            }
-        });
+    if (!existingInput && note.status === 'open') {
+        showClosingNoteInput(noteId);
+        return;
+    }
+
+    try {
+        const status = existingInput ? 'closed' : 'open';
+        await sendPanelAction('setNoteStatus', undefined, {noteId, status, closingNote: existingInput?.value});
+    } catch (failure) {
+        let error = noteDiv.querySelector('.note-status-error');
+        if (!error) {
+            error = document.createElement('p');
+            error.className = 'note-status-error note-edit-error';
+            error.setAttribute('role', 'alert');
+            noteDiv.append(error);
+        }
+        error.textContent = failure.message;
     }
 }
 

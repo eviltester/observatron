@@ -1,6 +1,12 @@
 // Parse note text to determine type and extract text content
 // Pure function with no Chrome API dependencies
 
+const standardNoteTypes = ['note', 'question', 'todo', 'bug'];
+
+function isClosableNoteType(type) {
+  return ['question', 'todo', 'bug'].includes(type) || type.endsWith('[]');
+}
+
 // Determine note type from text and extract clean note text
 function getSpecialNoteTypeFromString(theString){
   var specialNote = 'note';
@@ -39,8 +45,7 @@ function getSpecialNoteTypeFromString(theString){
         specialConfig = specialConfig.substring(0, 15);
 
         // Check if it's actually a standard type name
-        var standardTypes = ['note', 'question', 'todo', 'bug'];
-        if(standardTypes.includes(specialConfig)){
+        if(standardNoteTypes.includes(specialConfig)){
           specialNote = specialConfig; // Treat as standard type
         } else {
           // It's a custom type

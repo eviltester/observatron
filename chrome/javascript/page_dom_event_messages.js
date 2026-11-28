@@ -80,98 +80,50 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
          console.log('duplicate HTML comments found in page');
       }
 
-       chrome.runtime.sendMessage({
-          method: 'htmlCommentsFound',
-          comments: newComments,
-          url: window.location.href
-       });
+       const result = {comments: newComments, url: window.location.href};
+       if (request.returnResult) sendResponse(result);
+       else chrome.runtime.sendMessage({method: 'htmlCommentsFound', ...result});
     }
 
-    if (request.method === 'scanBrokenLinks') {
-       const isManual = request.manual || false;
-       if (!isManual && (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain)) return;
+    if (request.method === 'scanBrokenLinks' || request.method === 'scanBrokenImages') {
+        const review = request.review === true;
+        if (review && sender.url !== chrome.runtime.getURL('javascript/worker.js')) return;
+        if (!review && (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain)) return;
 
-        let links = [];
-       const anchors = document.querySelectorAll('a[href]');
-       const checkedHashes = new Set(request.checkedHashes || []);
+        const isLink = request.method === 'scanBrokenLinks';
+        const url = window.location.href;
+        const checkedHashes = new Set(request.checkedHashes || []);
+        const seenUrls = new Set();
+        const assets = [];
+        const selector = isLink ? 'a[href]' : review ? 'img' : 'img[src]';
+        for (const element of document.querySelectorAll(selector)) {
+            const address = isLink ? element.href : (review && element.currentSrc) || element.src;
+            if (!/^https?:\/\//i.test(address)) continue;
 
-       for (const el of anchors) {
-          const href = el.href;
-          if (!href) continue;
+            const hash = simpleHash(address);
+            if (review ? seenUrls.has(address) : checkedHashes.has(hash)) continue;
+            seenUrls.add(address);
+            let text = isLink
+                ? element.textContent.trim() || element.innerText?.trim() || '[no text]'
+                : element.alt || '[no alt]';
+            if (text.length > 100) text = text.substring(0, 100) + '...';
+            assets.push({url: address, source: url, hash, text});
+        }
 
-          let url;
-          try {
-             url = new URL(href, window.location.href).href;
-          } catch (e) {
-             continue; // Invalid URL
-          }
+        if (review) {
+            sendResponse({assets, url});
+            return false;
+        }
 
-          // Skip non-HTTP/HTTPS
-          if (!url.startsWith('http://') && !url.startsWith('https://')) continue;
-
-          const hash = simpleHash(url);
-          if (!checkedHashes.has(hash)) {
-             let text = el.textContent.trim() || el.innerText.trim() || '[no text]';
-             if (text.length > 100) {
-                text = text.substring(0, 100) + '...';
-             }
-             links.push({ url, source: window.location.href, hash, text });
-          }
-       }
-
-        if (links.length > 0) {
-           console.log('Observatron: Sending', links.length, 'links to check for broken');
-           chrome.runtime.sendMessage({
-              method: 'brokenLinksFound',
-              links: links
-           });
+        const assetName = isLink ? 'links' : 'images';
+        if (assets.length) {
+            console.log('Observatron: Sending', assets.length, assetName, 'to check for broken');
+            if (isLink) chrome.runtime.sendMessage({method: 'brokenLinksFound', links: assets});
+            else chrome.runtime.sendMessage({method: 'brokenImagesFound', images: assets});
         } else {
-           console.log('Observatron: No new links to check for broken');
+            console.log('Observatron: No new', assetName, 'to check for broken');
         }
     }
-
-    if (request.method === 'scanBrokenImages') {
-       const isManual = request.manual || false;
-       if (!isManual && (!isObservatronEngaged || !engagedDomain || window.location.hostname !== engagedDomain)) return;
-
-        let images = [];
-       const imgs = document.querySelectorAll('img[src]');
-       const checkedHashes = new Set(request.checkedHashes || []);
-
-       for (const el of imgs) {
-          const src = el.src;
-          if (!src) continue;
-
-          let url;
-          try {
-             url = new URL(src, window.location.href).href;
-          } catch (e) {
-             continue; // Invalid URL
-          }
-
-          // Skip non-HTTP/HTTPS
-          if (!url.startsWith('http://') && !url.startsWith('https://')) continue;
-
-          const hash = simpleHash(url);
-          if (!checkedHashes.has(hash)) {
-             let alt = el.alt || '[no alt]';
-             if (alt.length > 100) {
-                alt = alt.substring(0, 100) + '...';
-             }
-             images.push({ url, source: window.location.href, hash, text: alt });
-          }
-       }
-
-        if (images.length > 0) {
-           console.log('Observatron: Sending', images.length, ' images to check for broken');
-           chrome.runtime.sendMessage({
-              method: 'brokenImagesFound',
-              images: images
-           });
-        } else {
-           console.log('Observatron: No new images to check for broken');
-        }
-   }
 
     if (request.method === 'scanCommentsForSave') {
        const comments = [];
@@ -310,7 +262,7 @@ function createClickEventListener() {
 
 function createResizeEventListener() {
   return function() {
-    sendResizeMessage();
+    if (!globalThis.observatronEmulatingViewport) sendResizeMessage();
   };
 }
 

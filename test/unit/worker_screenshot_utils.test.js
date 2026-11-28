@@ -37,6 +37,59 @@ describe('worker_screenshot_utils.js', () => {
       )
     })
 
+    it('does not look up a selector after the selected page has changed', () => {
+      const callback = vi.fn()
+      const scope = {pageUrl: 'https://another.example.test/', elementUrl: 'https://another.example.test/', inFrame: false}
+      chrome.scripting.executeScript.mockImplementation(({func, args}, complete) => {
+        complete([{result: func(...args)}])
+      })
+
+      getUpdatedRect('#could-exist-on-both-pages', 123, callback, scope)
+
+      expect(callback).toHaveBeenCalledWith(null)
+    })
+
+    it('does not crop a replacement element that has the same locator as an earlier finding', () => {
+      const original = document.createElement('button')
+      original.id = 'reported-screenshot-element'
+      document.body.append(original)
+      const replacement = original.cloneNode()
+      original.replaceWith(replacement)
+      const callback = vi.fn()
+      const scope = {
+        pageUrl: location.href, elementUrl: location.href,
+        finding: {scanId: 'report-id', documentId: 'document-id', index: 0}
+      }
+      vi.stubGlobal('observatronAccessibilityScan', {id: 'report-id', elements: [new WeakRef(original)]})
+      chrome.scripting.executeScript.mockImplementation(({func, args}, complete) => complete([{result: func(...args)}]))
+      try {
+        getUpdatedRect('#reported-screenshot-element', 123, callback, scope)
+        expect(chrome.scripting.executeScript).toHaveBeenCalledWith(
+          expect.objectContaining({target: {tabId: 123, documentIds: ['document-id']}}), expect.any(Function))
+        expect(callback).toHaveBeenCalledWith(null, 'The reported element is no longer available. Run the check again.')
+      } finally {
+        replacement.remove()
+        vi.unstubAllGlobals()
+      }
+    })
+
+    it('reports an ambiguous or invalid supplied CSS selector', () => {
+      const fixture = document.createElement('div')
+      fixture.innerHTML = '<button class="fixture-crop"></button><button class="fixture-crop"></button>'
+      document.body.append(fixture)
+      const callback = vi.fn()
+      const scope = {pageUrl: location.href, elementUrl: location.href, singleMatch: true}
+      chrome.scripting.executeScript.mockImplementation(({func, args}, complete) => complete([{result: func(...args)}]))
+      try {
+        getUpdatedRect('.fixture-crop', 123, callback, scope)
+        expect(callback).toHaveBeenLastCalledWith(null, 'The CSS selector matched 2 elements. Use a selector that matches just one.')
+        getUpdatedRect('[', 123, callback, scope)
+        expect(callback).toHaveBeenLastCalledWith(null, 'Enter a valid CSS selector.')
+      } finally {
+        fixture.remove()
+      }
+    })
+
     it('should handle successful element rect calculation', () => {
       const mockCallback = vi.fn()
       const mockResult = { left: 10, top: 20, width: 100, height: 50 }
@@ -117,7 +170,7 @@ describe('worker_screenshot_utils.js', () => {
   })
 
   describe('cropElementScreenshot', () => {
-    it('should store dataURL in temporary storage', () => {
+    it('passes the image directly to the tab without using shared storage', () => {
       const mockCallback = vi.fn()
       const dataURL = 'data:image/png;base64,test'
       const rect = { left: 10, top: 20, width: 100, height: 50 }
@@ -129,8 +182,9 @@ describe('worker_screenshot_utils.js', () => {
 
       cropElementScreenshot(dataURL, rect, tabId, mockCallback)
 
-      expect(chrome.storage.local.set).toHaveBeenCalledWith(
-        { tempDataURL: dataURL },
+      expect(chrome.storage.local.set).not.toHaveBeenCalled()
+      expect(chrome.scripting.executeScript).toHaveBeenCalledWith(
+        expect.objectContaining({target: {tabId}, args: [dataURL, 10, 20, 100, 50]}),
         expect.any(Function)
       )
     })
@@ -141,11 +195,6 @@ describe('worker_screenshot_utils.js', () => {
       const rect = { left: 10, top: 20, width: 100, height: 50 }
       const tabId = 123
 
-      // Mock storage.set to call its callback immediately
-      chrome.storage.local.set.mockImplementation((data, callback) => {
-        callback()
-      })
-
       chrome.scripting.executeScript.mockImplementation((options, callback) => {
         callback([{ result: 'cropped-data-url' }])
       })
@@ -155,7 +204,7 @@ describe('worker_screenshot_utils.js', () => {
       expect(chrome.scripting.executeScript).toHaveBeenCalledWith(
         expect.objectContaining({
           target: { tabId },
-          args: [rect.left, rect.top, rect.width, rect.height]
+          args: [dataURL, rect.left, rect.top, rect.width, rect.height]
         }),
         expect.any(Function)
       )
@@ -167,10 +216,6 @@ describe('worker_screenshot_utils.js', () => {
       const rect = { left: 10, top: 20, width: 100, height: 50 }
       const croppedDataURL = 'data:image/png;base64,cropped'
 
-      chrome.storage.local.set.mockImplementation((data, callback) => {
-        callback()
-      })
-
       chrome.scripting.executeScript.mockImplementation((options, callback) => {
         callback([{ result: croppedDataURL }])
       })
@@ -180,46 +225,27 @@ describe('worker_screenshot_utils.js', () => {
       expect(mockCallback).toHaveBeenCalledWith(croppedDataURL)
     })
 
-    it('should clean up temporary storage after cropping', () => {
-      const mockCallback = vi.fn()
-      const dataURL = 'data:image/png;base64,test'
+    it('keeps concurrently submitted crops scoped to their own image and tab', () => {
+      const first = vi.fn()
+      const second = vi.fn()
       const rect = { left: 10, top: 20, width: 100, height: 50 }
+      const pending = []
+      chrome.scripting.executeScript.mockImplementation((request, callback) => pending.push({request, callback}))
 
-      chrome.storage.local.set.mockImplementation((data, callback) => {
-        callback()
-      })
+      cropElementScreenshot('data:image/png;base64,first', rect, 123, first)
+      cropElementScreenshot('data:image/png;base64,second', rect, 456, second)
+      pending[1].callback([{result: pending[1].request.args[0]}])
+      pending[0].callback([{result: pending[0].request.args[0]}])
 
-      // Mock storage.get and remove to call their callbacks
-      chrome.storage.local.get.mockImplementation((keys, callback) => {
-        callback({ tempDataURL: dataURL })
-      })
-
-      chrome.storage.local.remove.mockImplementation((keys, callback) => {
-        // remove doesn't have a callback in the actual API, but we'll call it anyway
-        if (callback) callback()
-      })
-
-      chrome.scripting.executeScript.mockImplementation((options, callback) => {
-        // Simulate the script calling storage.get, which calls storage.remove
-        chrome.storage.local.get(['tempDataURL'], (result) => {
-          chrome.storage.local.remove(['tempDataURL'])
-          callback([{ result: 'cropped-data-url' }])
-        })
-      })
-
-      cropElementScreenshot(dataURL, rect, 123, mockCallback)
-
-      expect(chrome.storage.local.remove).toHaveBeenCalledWith(['tempDataURL'])
+      expect(pending.map(item => item.request.target.tabId)).toEqual([123, 456])
+      expect(first).toHaveBeenCalledWith('data:image/png;base64,first')
+      expect(second).toHaveBeenCalledWith('data:image/png;base64,second')
     })
 
     it('should handle cropping script execution errors', () => {
       const mockCallback = vi.fn()
       const dataURL = 'data:image/png;base64,test'
       const rect = { left: 10, top: 20, width: 100, height: 50 }
-
-      chrome.storage.local.set.mockImplementation((data, callback) => {
-        callback()
-      })
 
       chrome.scripting.executeScript.mockImplementation((options, callback) => {
         callback(undefined)
@@ -235,10 +261,6 @@ describe('worker_screenshot_utils.js', () => {
       const dataURL = 'data:image/png;base64,test'
       const rect = { left: -10, top: -20, width: 0, height: 0 }
 
-      chrome.storage.local.set.mockImplementation((data, callback) => {
-        callback()
-      })
-
       chrome.scripting.executeScript.mockImplementation((options, callback) => {
         callback([{ result: 'cropped-data-url' }])
       })
@@ -248,20 +270,5 @@ describe('worker_screenshot_utils.js', () => {
       expect(mockCallback).toHaveBeenCalledWith('cropped-data-url')
     })
 
-    it('should handle storage operation failures', () => {
-      const mockCallback = vi.fn()
-      const dataURL = 'data:image/png;base64,test'
-      const rect = { left: 10, top: 20, width: 100, height: 50 }
-
-      // Mock storage.set to not call the callback (simulating failure)
-      chrome.storage.local.set.mockImplementation((data, callback) => {
-        // Don't call callback to simulate failure
-      })
-
-      cropElementScreenshot(dataURL, rect, 123, mockCallback)
-
-      // Should not attempt to execute script if storage fails
-      expect(chrome.scripting.executeScript).not.toHaveBeenCalled()
-    })
   })
 })

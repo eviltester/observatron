@@ -2,7 +2,7 @@
 
 Observatron is a Chrome extension for gathering evidence while you explore and test web applications. It can take screenshots, save MHTML page snapshots, log browser events, and organise notes, bugs, questions, and todos.
 
-The side panel also has page checks for broken links, broken images, HTML comments, and accessibility. In Chrome DevTools, Traffic Monitor checks available HTTP request and response text for strings you choose. You can add findings to your notes alongside your other session evidence.
+The side panel has page checks for broken links, broken images, HTML comments, and accessibility. Traffic Monitor searches HTTP request and response bodies, Network Errors collects failed requests, and Console Monitor collects console messages and JavaScript errors. You can add findings to your notes alongside your other session evidence.
 
 You can download this from the Chrome Store:
 
@@ -25,6 +25,8 @@ To use:
 - Click the green button [Disengage the observatron] to finish automated observing
 
 Only the domain you engage observatron will have automated events logged, manual logs can be created from the notes view on any page.
+
+Right-click the toolbar icon to open **Show Side Panel**, find the **Tools** submenu, or choose **Start Observing** or **Stop Observing**. The same observation controls sit above the sidebar tabs, with a green indicator while observing and a red one when stopped. Chrome displays the split red-and-green extension icon beside the panel title. Stopping keeps the side panel open.
 
 As you browse and test, you will see files download based on the configured options.
 
@@ -58,11 +60,12 @@ If the observatron is engaged and you have configured "Double Click Screenshots"
 
 Some functionality is available regardless of the engaged state of the observatron.
 
-You can always use the context menu to:
+The context menu's **Tools** submenu has these actions:
 
-- Take Screenshot Now
-- Save as MHTML Now
-- Take Note
+- **Take Screenshot Now**
+- **Save as MHTML Now**
+- **Take Note**
+- **Save Comments**
 
 "Take Note" is also mapped to a key, by default this is "Ctrl+Shift+L" or "Cmd+Shift+L" on Mac
 
@@ -95,7 +98,7 @@ e.g. Saved as "obs_2019-02-20-11-32-57-208-question_1550662375417.json"
 {"type":"question","text":"should the system do this?","id":"1550662375417"}
 ~~~~~~~~
 
-After typing a note you will see a prompt "Do you want a screenshot with that?". Choosing [OK] will save a screenshot, choosing [Cancel] will not.
+Choose **Include screenshot** to capture the visible page with the note, or **Include element screenshot** to attach a crop. Then click **Save Note**.
 
 Type of notes are:
 
@@ -103,6 +106,10 @@ Type of notes are:
 - "!" `bug`
 - "-" `todo`
 - "@anythingyouwant" where "anythingyouwant" is the type you want
+
+In **Notes Collection**, use **Change Type** on an open note to choose a built-in or custom type. Types that support opening and closing keep the note open. A custom type ending in `[]` supports both statuses.
+
+When saving a note with **Include element screenshot**, choose the last clicked element or the selection in DevTools. The note links to the cropped image when capture succeeds. If a screenshot fails, Observatron saves the note and shows the reason below **Save Note**.
 
 When you save a screenshot it will have `_note_noteid` at the end of the filename.
 
@@ -114,33 +121,57 @@ This can help you cross-reference screenshots to notes, although the timestampin
 
 Open the Observatron side panel or the **Test Observatron** panel in Chrome DevTools.
 
-- Use **Check Broken Links** and **Check Broken Images** to check resources on the current page. Both checks can also run during automated observation when enabled in Options.
-- Open **HTML Comments Review** and click **Scan For HTML Comments** to see the comments on the page. **Add to Note Draft** copies an individual comment to your draft, and **Save to Markdown** exports the full scan. **Clear Results** clears the review. The **Event Logging** options can also detect comments or log them as notes as you browse.
-- Open **Axe Accessibility Review** and click **Check Accessibility** to run axe-core on the current page's main document. Expand a finding to see its affected elements. **Needs Manual Review** lists checks axe could not decide, with the rule ID, guidance, and elements to inspect. **Show on Page** scrolls to an element and outlines it for five seconds. **Show HTML** displays the captured snippet. **Add to Note Draft** appends the finding, and **Clear Results** clears the review while preserving your draft.
+Expand **Monitors** on the **Observatron** page to see the **Axe**, **HTML Comments**, **Links**, **Images**, **Traffic**, **Network Errors**, and **Console** subtabs. The section starts collapsed. Its heading lists each monitor, its count when it has results, and a spinner while a review runs. The dedicated **Monitors** tab opens directly to the same subtabs and shows their combined total. The counts change colour when new results arrive.
+
+The URL below the tabs shows which page Observatron is targeting. Hover over it to see the full address. The copy button copies the full URL, and **Create Note** adds it to the note draft. The sidebar follows the active browser tab. The DevTools panel stays with the tab it is inspecting.
+
+Under **Add Element Note**, **Active in page** becomes available after you click an element that is still on the target page. **Selected in Dev Tools** is available while DevTools is open for that tab and uses the selection from **DevTools → Elements**. Both actions include the source URL in your draft. **Take Element Screenshot** also has a **By CSS Selector** option for selectors that match one element in the main document. Warnings appear below the action and clear after 15 seconds or when you click **×**.
+
+- Select **Links** or **Images** and run the check to see failed URLs and their HTTP results. Use **Add to Note Draft** on any finding you want to record or **Clear Results** to empty the review. Both checks can also run during automated observation when enabled in Options.
+- Select **HTML Comments** and click **Scan For HTML Comments** to see the comments on the page. **Add to Note Draft** copies an individual comment to your draft, and **Save to Markdown** exports the full scan. **Clear Results** clears the review.
+- Select **Axe** and click **Check Accessibility** to run axe-core on the current page's main document. The heading shows the number of confirmed issues. Expand a finding to see its affected elements. **Needs Manual Review** lists checks axe could not decide, with the rule ID, guidance, and elements to inspect. **Show on Page** scrolls to an element and outlines it for five seconds. **Take Screenshot** crops the element from the scan while it is still on the page, including for a page-load report. **Show HTML** displays the captured snippet. **Add to Note Draft** appends the finding, and **Clear Results** clears the review while preserving your draft.
+- Select **Axe → Check Responsive Accessibility** to run axe-core at 360, 768, and 1280 CSS pixels wide. The check temporarily resizes the current tab's viewport and restores it when the scan finishes. The report groups confirmed issues and manual checks by width. Expand a finding to see its selector and HTML, or add it to a note draft with the viewport width.
+
+In **Options → Event Logging**, enable a page-load review for HTML comments, accessibility, broken links, or broken images to check pages as you browse an observed domain. Each defaults to populating its review section. A spinner appears on the review tab while the check runs, including in AutoNotes mode. Select **AutoNotes** to save findings automatically.
 
 ## Traffic Monitor
 
 Traffic Monitor brings the request and response text checks from [CDP Test Support](https://github.com/eviltester/cdptestsupport) into Observatron. Use it to find unexpected destinations for synthetic test data or to catch server messages you did not see in the UI.
 
-1. Open Chrome DevTools on the tab you are testing and select **Test Observatron**.
-2. Expand **Traffic Monitor** and add temporary rules under **Session-only rules**, one rule per line. **Use saved rules from Options** is checked by default. Uncheck it to run only the session rules.
-3. Click **Start Monitoring**, then exercise the feature. The monitor checks completed HTTP and HTTPS requests from that tab, including requests to other domains. The heading shows the match count and changes colour as matches arrive, even while the panel is collapsed. The non-interactive sidebar line mirrors the count and colour for the active tab.
-4. Tick the matches whose rules you want to reuse and click **Save Selected Rules to Options**. Manage these rules under **Options → Saved Traffic Rules**, where you can also add rules directly. Changes to saved rules take effect the next time you click **Start Monitoring**.
-5. Expand **Match details** to see the request URL, including query parameters, and a short excerpt highlighting the first occurrence in the request or response body. **Add to Note Draft** records the resource path and match location. **Clear Matches** empties the list, and **Stop Monitoring** ends the run. Closing DevTools discards the session rules and match list.
+Turn on **Traffic Monitoring** in **Options → Event Logging** to start the monitor for the panel's target tab using the saved rules. Its button reads **Monitoring On - configure via options**. Switch the option off to stop automatic monitoring and use the manual controls.
+
+1. Open the Observatron side panel, or select **Test Observatron** in Chrome DevTools. Both panels show the same report for the monitored tab.
+2. Select **Traffic** and add temporary rules under **Session-only rules**, one rule per line. **Use saved rules from Options** is checked by default. Uncheck it to run only the session rules.
+3. Click **Start Monitoring**, then exercise the feature. The monitor checks completed HTTP and HTTPS requests from that tab, including requests to other domains. The Traffic tab shows the match count and changes colour as matches arrive.
+4. Tick the matches whose rules you want to reuse and click **Save Selected Rules to Options**. Manage these rules under **Options → Saved Traffic Rules**, where you can also add rules directly. Manual runs load saved rules when you click **Start Monitoring**. Automatic runs pick up changes as you save them.
+5. Expand **Match details** to see the request URL, including query parameters, and a short excerpt highlighting the first occurrence in the request or response body. **Add to Note Draft** records the resource path and match location. **Clear Matches** empties the list, and **Stop Monitoring** ends the run.
 
 Use the same rule syntax in Traffic Monitor and **Options → Saved Traffic Rules**.
 
 ```text
 Checkout email = qa+checkout@example.test
 Padded value = " padded value   "
+Quoted value = ""ok""
 Whole word * \btodo\b
 ```
 
-`=` finds a case-sensitive literal substring. Double quotes around the value preserve every character inside them, including leading and trailing spaces. `*` takes a JavaScript regular expression with whitespace on both sides of the separator. Enter the pattern directly, without slash delimiters. A whole-word regex such as `\btodo\b` matches `todo` as a word.
+`=` finds a case-sensitive literal substring. Double quotes around the value preserve every character inside them, including spaces and inner quotes. `Quoted value = ""ok""` matches `"ok"` with the quotes. `*` takes a JavaScript regular expression with whitespace on both sides of the separator. Enter the pattern directly, without slash delimiters. A whole-word regex such as `\btodo\b` matches `todo` as a word.
 
-Matching covers request bodies and text response bodies that DevTools makes available after a request completes. Headers, URL parameters, binary data, and WebSocket messages are outside its scope. Start before exercising the page so the monitor can see the traffic you want to check.
+Matching covers request bodies and text response bodies that Chrome makes available after a request completes. Headers, URL parameters, binary data, and WebSocket messages are outside its scope. Start before exercising the page so the monitor can see the traffic you want to check.
 
-The monitor reports the rule name, request or response, HTTP method, resource URL, and time. Note drafts include the URL through the resource path and the line and column of the first match. Query parameters and body excerpts are available in the DevTools report. Saving a rule writes its name and exact search text to this browser profile. Use synthetic values as markers. The monitor works independently of the toolbar's **Engage Observatron** button, which scopes automated observation to the hostname where you engaged it.
+The monitor reports the rule name, request or response, HTTP method, resource URL, and time. Note drafts include the URL through the resource path and the line and column of the first match. Query parameters and body excerpts are available in the report. Saving a rule writes its name and exact search text to this browser profile. Use synthetic values as markers.
+
+## Network Errors
+
+Select **Network Errors** and click **Start Monitoring** to collect HTTP 4xx and 5xx responses and failed network requests independently of any Traffic rules. Expand an error for the request URL, HTTP method, page or frame URL, resource type, error, and time. Use **Add to Note Draft** to keep an error or **Clear Results** to empty the report.
+
+In **Options → Event Logging**, turn on **Network Errors** to start it automatically for the panel's target tab. **Log as Network Errors Report** is the default. Select **Log network errors as AutoNotes** to save each new error to the Notes Collection as it occurs.
+
+## Console Monitor
+
+Select **Console** and click **Start Monitoring** to collect page console messages and uncaught JavaScript errors as you test. Expand an entry for its full message, location, and stack trace when available. Click **Add to Note Draft** to keep an entry, or **Clear Results** to empty the review. Turn on **Console Logging** in **Options → Event Logging** to start it automatically for the panel's target tab.
+
+Traffic, Network Errors, and Console have separate controls and share one debugger connection per tab. Chrome shows its debugging banner while the debugger is attached. Stopping all monitors releases the connection. Each report keeps the latest 100 results for that tab. Capture continues when you switch tabs or close the panel, and closing the monitored tab discards its temporary rules and reports. The monitors' start and stop controls are separate from automated observation.
 
 ## Keyboard Shortcuts
 
@@ -154,19 +185,15 @@ To create a note:
 
 ## Context Menu
 
-The context menu provides access to instant screenshot or .mhtml saving, and allows you to toggle on and off the checkbox options.
-
-(You still need to use the options screen to change output paths and timings)
-
-![](release/menu-screenshot-640-400.png)
+Right-click the Observatron toolbar icon. **Show Side Panel** comes first, followed by a separator and **Tools**. **Start Observing**, **Stop Observing**, and **Options** are also on this menu. Use **Options** to configure event logging, output paths, and timings.
 
 ---
 
 ## Options Screen
 
-The options screen, right click from context menu or manage from `chrome://extensions`
+The sidebar's **Options** tab saves settings when you switch to another tab. On the standalone Options page, opened from the extension menu or `chrome://extensions`, click **Save** to apply changes.
 
-![](release/options-screenshot-1280x800.png)
+![Earlier standalone Options layout](release/options-screenshot-1280x800.png)
 
 
 ---
@@ -199,10 +226,9 @@ All images are stored in your downloads folder so you can easily find them and s
 
 You can also save logs of: bugs, todos, questions, or any custom information. To do this:
 
-- from the context menu choose "Take Note"
-- in the dialog, write your note
-- you will be asked if you want a screenshot with that
-- the note and optional screenshot will be saved to your downloads
+- From the context menu, choose **Tools → Take Note**, or switch to **Notes** in the sidebar.
+- Write your note and choose any screenshots to include.
+- Click **Save Note** to save the note and its attachments to your downloads.
 
 Notes take the format:
 
@@ -211,7 +237,7 @@ Notes take the format:
 - "- todo text to output"
 - "@type text to output as custom type"
 
-When you save a screenshot with the note screenshot it will have `_note_noteid` at the end of the filename. This can help you cross reference screenshots to notes, although the timestamping should mean that the screenshot is the next file saved after the note.
+Screenshots saved with a note have `_note_<noteid>` at the end of the filename. The note records the paths to its saved screenshots.
 
 e.g. "obs_2019-02-20-11-32-57-314-screenshot-1201x1104_note_1550662375417.jpg"
 
@@ -281,16 +307,11 @@ show notes in side-bar
 - improve automated execution and condition coverage during build#
 - allow saving a filtered list of notes e.g. all open items or any filter to a text, json file or clipboard e.g. easy end of session open tasks and bugs tracking
 - when checking a link, if an error occurs, all the user sees is 'error' with no indication of what happened - improve this
-- for broken links - perhaps add a 'check again' button?
-- improve saving comments when no comments
-
-when saving comments manually from sidebar or extension and there are no comments,
-then no visible indication of no comments is provided so user might think the save doesn't work
-suggest - add a console log, or write an empty file, or add notification on screen
+- show a message when **Tools → Save Comments** finds no comments
 
 ### Build and Deploy
 
-1. Update the version in `chrome/manifest.json` and `package.json` and land the changes on `master`.
+1. Update the version in `chrome/manifest.json` and `package.json`, then land the changes on `master`.
 2. In GitHub, choose **Actions → Make Release → Run workflow** on `master`.
 3. The workflow runs lint and tests, then publishes `v<version>` with generated release notes and `observatron-v-<version>.zip`.
 
@@ -300,6 +321,15 @@ suggest - add a console log, or write an empty file, or add notification on scre
 
 # Versions
 
+- 1.0.4
+   - Added **Start Observing** and **Stop Observing** to the sidebar and toolbar menu. Put **Show Side Panel** first, grouped manual actions under **Tools**, and added the split red-and-green panel icon.
+   - Added **Notes**, **Tools**, **Monitors**, and **Options** tabs. Sidebar Options save when you leave the tab. The sidebar opens at the top and shows a shortened page URL with copy and note actions for the full address.
+   - Grouped Axe, HTML Comments, Links, Images, Traffic, Network Errors, and Console in the collapsible **Monitors** section and the dedicated **Monitors** tab. Added live counts, colour changes, and progress spinners.
+   - Added sidebar traffic monitoring and console capture, with manual or automatic start, reviewable results, and actions to add findings to a draft. Traffic Monitor supports both saved rules and rules for the current session.
+   - Added on-demand HTML comment, broken link, and broken image reports. Those checks and Axe can run on page load and show a report or save AutoNotes.
+   - Added an independent **Network Errors** monitor with report and AutoNotes modes, and a **Responsive Accessibility** check that runs Axe at three viewport widths.
+   - Added note and screenshot actions for the last clicked element or the DevTools selection. Element screenshots also support a CSS selector or the specific element from an Axe finding.
+   - Added type changes for open notes. Notes save even when a screenshot fails, with a dismissible warning below the action.
 - 1.0.3
    - Added Traffic Monitor to the DevTools panel. Search available HTTP request and response text for named strings, including traffic to third-party destinations. Add observations to your notes and save selected search rules in Options for reuse.
    - Show the rules and affected elements that need manual review in the Axe Accessibility Review.

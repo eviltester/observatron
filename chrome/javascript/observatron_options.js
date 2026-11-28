@@ -50,8 +50,14 @@ Options.prototype.setOnPostSubmit = function(value){
 Options.prototype.setOnPageLoadDetectHtmlComments = function(value){
     this.setBooleanPropertyIfValid("onPageLoadDetectHtmlComments", value);
 };
-Options.prototype.setOnPageLoadLogHtmlCommentsAsNotes = function(value){
-    this.setBooleanPropertyIfValid("onPageLoadLogHtmlCommentsAsNotes", value);
+Options.prototype.setHtmlCommentsOutput = function(value){
+    if (value === 'report' || value === 'notes') this.htmlCommentsOutput = value;
+};
+Options.prototype.setOnPageLoadAccessibilityReview = function(value){
+    this.setBooleanPropertyIfValid('onPageLoadAccessibilityReview', value);
+};
+Options.prototype.setAccessibilityOutput = function(value){
+    if (value === 'report' || value === 'notes') this.accessibilityOutput = value;
 };
 Options.prototype.setOnPageMutation = function(value){
     this.setBooleanPropertyIfValid("onPageMutation", value);
@@ -114,14 +120,22 @@ function getDefaultOptions() {
         onDoubleClickShot: true,
         onPostSubmit: false,
         onPageLoadDetectHtmlComments: false,
-        onPageLoadLogHtmlCommentsAsNotes: false,
+        htmlCommentsOutput: 'report',
+        onPageLoadAccessibilityReview: false,
+        accessibilityOutput: 'report',
+        autoConsoleLogging: false,
+        autoTrafficMonitoring: false,
+        autoNetworkErrors: false,
+        networkErrorsOutput: 'report',
         onPageMutation: false,
         onInputChanges: true,
         onClickEvents: true,
         reportBrokenLinks: false,
+        brokenLinksOutput: 'report',
         reportBrokenLinksTimeoutMs: 10000,
         reportBrokenLinksCheckDelayMs: 1000,
         reportBrokenImages: false,
+        brokenImagesOutput: 'report',
         reportBrokenImagesTimeoutMs: 10000,
         reportBrokenImagesCheckDelayMs: 1000,
         filepath: "observatron/",
@@ -131,6 +145,17 @@ function getDefaultOptions() {
         scrolling_timeout_milliseconds: 500,
         resize_timeout_milliseconds: 500
     };
+}
+
+function migratePageReviewOptions(stored) {
+    const {onPageLoadLogHtmlCommentsAsNotes: legacyAutoNotes, ...current} = stored || {};
+    if (current.htmlCommentsOutput === undefined && legacyAutoNotes === true) {
+        current.onPageLoadDetectHtmlComments = true;
+        current.htmlCommentsOutput = 'notes';
+    }
+    if (current.brokenLinksOutput === undefined && current.reportBrokenLinks === true) current.brokenLinksOutput = 'notes';
+    if (current.brokenImagesOutput === undefined && current.reportBrokenImages === true) current.brokenImagesOutput = 'notes';
+    return current;
 }
 
 function sanitizeSessionName(sessionName) {

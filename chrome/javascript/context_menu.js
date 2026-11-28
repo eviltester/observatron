@@ -1,112 +1,73 @@
-// https://developer.chrome.com/extensions/contextMenus
+function ContextMenus() {
+    const contexts = ['all', 'action'];
+    let observing = false;
+    let creating = false;
 
-function ContextMenus(){
+    this.setObserving = engaged => {
+        observing = engaged;
+        // The items may not exist yet on first install. Creation uses the same state.
+        chrome.contextMenus.update('startObserving', {enabled: !observing}, () => { void chrome.runtime.lastError; });
+        chrome.contextMenus.update('stopObserving', {enabled: observing}, () => { void chrome.runtime.lastError; });
+    };
 
-    contextMenus = {};
-    contextTypes = ["all", "page", "browser_action"];
-
-    this.init = function(downloadScreenshotFunction, saveAsMhtmlFunction, saveCommentsFunction, options){
-        this.saveAsMhtml = saveAsMhtmlFunction;
-        this.options = options;
-        this.downloadScreenshot = downloadScreenshotFunction;
-        this.saveComments = saveCommentsFunction;
-    }
-
-    function createSeparator(id){
-        return chrome.contextMenus.create(
-            {"id": id, "type": "separator", "contexts": ["page"]});
-    }
-
-    function createMenu(id, title){
-
-        return chrome.contextMenus.create(
-            {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
-    }
-
-    function createParentMenu(id, title){
-        return chrome.contextMenus.create(
-            {"id": id, "title": title, "type": "normal", "contexts": contextTypes});
-    }
-
-    function createCheckboxMenu(id, title, currentStatus, parent){
-        var menuDetails = {"id": id, "title": title, "type": "checkbox", "checked" : currentStatus, "contexts": contextTypes};
-        if(parent !== undefined){
-            menuDetails.parentId = parent;
-        }
-        return chrome.contextMenus.create(menuDetails);
-    }
-
-    this.createMenus = function(){
-        // Remove all existing menus to prevent duplicates
-        chrome.contextMenus.removeAll(function() {
-            // Create menus after removal is complete
-            try {
-                contextMenus.takeScreenshotNow = createMenu("takeScreenshotNow", "Take Screenshot Now");
-                contextMenus.saveAsMhtmlNow = createMenu("saveAsMhtmlNow", "Save as MHTML Now");
-                contextMenus.logNote = createMenu("logNote", "Take Note");
-                contextMenus.saveComments = createMenu("saveComments", "Save Comments");
-                contextMenus.showSidePanel = createMenu("showSidePanel", "Show Side Panel");
-
-                contextMenus.line2 = createSeparator("separator2");
-                contextMenus.showOptionsNow = createMenu("showOptionsNow", "Options");
-
-                console.log("Context menus created successfully");
-
-                // Register click handler after menus are created
-                chrome.contextMenus.onClicked.addListener(contextMenuClickHandler);
-            } catch (error) {
-                console.error("Failed to create context menus:", error);
+    this.createMenus = () => {
+        if (creating) return;
+        creating = true;
+        chrome.contextMenus.removeAll(() => {
+            creating = false;
+            if (chrome.runtime.lastError) {
+                console.warn('Could not rebuild the Observatron menu:', chrome.runtime.lastError.message);
+                return;
+            }
+            // Chrome allows six top-level entries on the toolbar icon.
+            for (const item of [
+                {id: 'showSidePanel', title: 'Show Side Panel'},
+                {id: 'afterSidePanel', type: 'separator'},
+                {id: 'tools', title: 'Tools'},
+                {id: 'startObserving', title: 'Start Observing', enabled: !observing},
+                {id: 'stopObserving', title: 'Stop Observing', enabled: observing},
+                {id: 'showOptionsNow', title: 'Options'},
+                {id: 'takeScreenshotNow', title: 'Take Screenshot Now', parentId: 'tools'},
+                {id: 'saveAsMhtmlNow', title: 'Save as MHTML Now', parentId: 'tools'},
+                {id: 'logNote', title: 'Take Note', parentId: 'tools'},
+                {id: 'saveComments', title: 'Save Comments', parentId: 'tools'}
+            ]) {
+                chrome.contextMenus.create({...item, contexts}, () => {
+                    if (chrome.runtime.lastError) console.warn('Could not create the Observatron menu item:', chrome.runtime.lastError.message);
+                });
             }
         });
-    }
+    };
 
-    function contextMenuClickHandler(info, tab){
-
-        switch(info.menuItemId){
-            case "takeScreenshotNow":
+    chrome.contextMenus.onClicked.addListener((info, tab) => {
+        switch (info.menuItemId) {
+            case 'showSidePanel':
+                if (tab?.id === undefined) return;
+                // Invoke open in the context-menu click to retain the user gesture.
+                Promise.all([showSidePanel(tab.id), chrome.sidePanel.open({tabId: tab.id})]).then(() => {
+                    void chrome.runtime.sendMessage({type: 'observatronFocusSidePanel', tabId: tab.id}).catch(() => {});
+                }).catch(error => console.warn('Could not open the Observatron side panel:', error.message));
+                return;
+            case 'startObserving':
+                void changeObservation('start', () => tab).catch(error => console.warn(error.message));
+                return;
+            case 'stopObserving':
+                void changeObservation('stop').catch(error => console.warn(error.message));
+                return;
+            case 'takeScreenshotNow':
                 downloadScreenshot();
                 return;
-            case "saveAsMhtmlNow":
+            case 'saveAsMhtmlNow':
                 saveAsMhtml();
                 return;
-            case "showOptionsNow":
-                contextMenuShowOptions();
-                return;
-            case "logNote":
+            case 'logNote':
                 logANote();
                 return;
-            case "saveComments":
+            case 'saveComments':
                 saveComments();
                 return;
-            case "showSidePanel":
-                showSidePanel(tab.id, true);
-                chrome.sidePanel.open({ tabId: tab.id });
-                return;
+            case 'showOptionsNow':
+                chrome.tabs.create({url: 'options/options_page.html'});
         }
-
-        // only if the menu contains options changing items
-        //updateTheContextMenus();
-        //changedOptions();
-    }
-
-    function contextMenuShowOptions(){
-        chrome.tabs.create({url:"options/options_page.html"});
-    }  
-
-
-    function updateTheContextMenus(){
-        // add any menu updates here if options shown in context menu
-
-        // e.g.
-        // try {
-        //     chrome.contextMenus.update("togglePostSubmit", {"checked" : options.onPostSubmit});
-        // } catch (e) { /* Menu might not exist */ }
-    }
-
-    this.updateContextMenus = function(){
-        updateTheContextMenus();
-    }
-
-    // Register click handler
-    chrome.contextMenus.onClicked.addListener(contextMenuClickHandler);
+    });
 }

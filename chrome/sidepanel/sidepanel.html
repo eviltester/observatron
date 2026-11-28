@@ -4,38 +4,172 @@
     <meta charset="utf-8">
     <title>Observatron Note</title>
     <style>
+        html { scroll-padding-top: 3rem; }
         body { font-family: Arial, sans-serif; padding: 20px; }
         textarea { width: 100%; height: 100px; }
         button { margin: 5px; }
-        #accessibility-review, #html-comments-review { margin: 10px 0; overflow-wrap: anywhere; }
-        #accessibility-review > summary, #html-comments-review > summary { font-weight: bold; }
+        #observation-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+        #observation-controls button { margin: 0; }
+        #observation-icon { width: 18px; height: 18px; object-fit: contain; }
+        #observation-status { font-size: .85rem; overflow-wrap: anywhere; }
+        #sidepanel-tabs {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #b8bec5;
+            background: Canvas;
+        }
+        #sidepanel-tabs button {
+            flex: 1;
+            margin: 0;
+            padding: 8px 4px;
+            border: 0;
+            border-bottom: 3px solid transparent;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            cursor: pointer;
+        }
+        #sidepanel-tabs button[aria-selected="true"] { border-bottom-color: Highlight; font-weight: bold; }
+        #sidepanel-tabs button:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+        #target-page { margin: 1em 0; }
+        #target-page-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        #target-page-location { display: flex; flex: 1 1 14rem; align-items: baseline; gap: 5px; min-width: 0; }
+        #target-page-label { white-space: nowrap; }
+        #target-page-url { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        #target-page-actions { display: flex; gap: 6px; }
+        #target-page-actions button { margin: 0; min-height: 26px; }
+        #copy-target-page-url { display: inline-grid; place-items: center; min-width: 28px; }
+        .copy-icon { display: inline-block; position: relative; width: 16px; height: 16px; }
+        .copy-icon::before, .copy-icon::after {
+            content: ''; position: absolute; box-sizing: border-box;
+            width: 11px; height: 11px; border: 1px solid currentColor; border-radius: 2px;
+        }
+        .copy-icon::before { top: 1px; left: 1px; }
+        .copy-icon::after { bottom: 1px; right: 1px; background: ButtonFace; }
+        #target-page-copy-feedback { font-size: .85rem; }
+        .note-type-editor { margin-top: 6px; }
+        .note-type-editor label:not([hidden]) { display: block; margin: 4px 0; }
+        .note-edit-error { color: #a83325; }
+        #element-note-actions { margin: 8px 0; }
+        #element-note-caption, #element-screenshot-caption { font-weight: bold; }
+        .panel-action-wrapper { display: inline-block; vertical-align: top; max-width: 100%; }
+        #element-selector-screenshot { margin: 4px 0; }
+        #element-screenshot-selector { box-sizing: border-box; max-width: 100%; }
+        .panel-action-warning:not([hidden]) {
+            display: flex;
+            align-items: start;
+            justify-content: space-between;
+            gap: 8px;
+            margin: 4px 0 8px;
+            padding: 6px 8px;
+            border: 1px solid #a83325;
+            border-inline-start-width: 4px;
+            border-radius: 4px;
+            background: #fff2ee;
+            color: #75251c;
+            overflow-wrap: anywhere;
+        }
+        .panel-action-warning button {
+            flex: none;
+            min-width: 24px;
+            min-height: 24px;
+            margin: 0;
+            border: 0;
+            background: transparent;
+            color: inherit;
+            font: bold 18px/1 Arial, sans-serif;
+            cursor: pointer;
+        }
+        #observatron-monitors, #monitor-workspace { margin: 14px 0; }
+        #observatron-monitors > summary { font-weight: bold; cursor: pointer; }
+        #observatron-monitors [data-monitor-summary] { white-space: nowrap; }
+        #monitor-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #b8bec5; }
+        #monitor-tabs button {
+            margin: 0;
+            padding: 6px 8px;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            cursor: pointer;
+        }
+        #monitor-tabs button[aria-selected="true"] { border-bottom-color: Highlight; font-weight: bold; }
+        #monitor-tabs button:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+        .monitor-badge { font-weight: bold; white-space: nowrap; }
+        #monitor-workspace [role="tabpanel"] { margin: 10px 0; overflow-wrap: anywhere; }
+        #monitor-workspace [role="tabpanel"] > h2 { font-size: 1.1rem; margin: 10px 0; }
+        .review-spinner:not([hidden]) {
+            display: inline-block;
+            box-sizing: border-box;
+            width: .8em;
+            height: .8em;
+            margin-inline-start: .45em;
+            vertical-align: -.05em;
+            border: 2px solid currentColor;
+            border-inline-end-color: transparent;
+            border-radius: 50%;
+            animation: review-spin .8s linear infinite;
+        }
+        @keyframes review-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .review-spinner { animation: none; } }
         #accessibility-findings details { margin: 8px 0; }
-        #accessibility-findings li + li { margin-top: 8px; }
+        #accessibility-findings li + li, [data-resource-review] li + li { margin-top: 8px; }
         .accessibility-guidance { white-space: pre-wrap; }
-        #accessibility-findings pre, #html-comment-findings pre, #traffic-matches pre {
+        #accessibility-findings pre, #html-comment-findings pre, #traffic-matches pre, #network-errors-results pre, #console-results pre {
             white-space: pre-wrap;
+            overflow-wrap: anywhere;
             max-height: 14em;
             overflow: auto;
             padding: 8px;
             border: 1px solid #ccc;
         }
-        #traffic-monitor { margin: 10px 0; overflow-wrap: anywhere; }
-        #traffic-monitor > summary, #traffic-monitor-sidebar-title { color: #000; font-weight: bold; }
-        #traffic-monitor-sidebar-note { margin: 10px 0; color: #595959; }
-        #traffic-matches li + li { margin-top: 8px; }
+        #traffic-matches li + li, #network-errors-results li + li, #console-results li + li { margin-top: 8px; }
     </style>
 </head>
 <body>
 
-    <div style="margin-bottom:10px">
-        <details>
-            <summary>Options</summary>
-            <div id="options-container"></div>
-            <hr>
-        </details>
+    <div id="observation-controls" role="group" aria-label="Observation controls" data-action-group>
+        <img id="observation-icon" src="../icons/red.png" width="18" height="18" alt="">
+        <button id="start-observing" type="button" disabled>Start Observing</button>
+        <button id="stop-observing" type="button" disabled>Stop Observing</button>
+        <span id="observation-status" role="status">Checking observation status…</span>
     </div>
 
-    <div style="margin-bottom:10px">
+    <div id="sidepanel-tabs" role="tablist" aria-label="Observatron sidebar">
+        <button id="observatron-tab" type="button" role="tab" aria-selected="true" aria-controls="observatron-panel">Observatron</button>
+        <button id="notes-tab" type="button" role="tab" aria-selected="false" aria-controls="notes-panel" tabindex="-1">Notes</button>
+        <button id="tools-tab" type="button" role="tab" aria-selected="false" aria-controls="tools-panel" tabindex="-1">Tools</button>
+        <button id="monitors-tab" type="button" role="tab" aria-selected="false" aria-controls="monitors-panel" tabindex="-1">Monitors<span class="monitor-badge" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></button>
+        <button id="options-tab" type="button" role="tab" aria-selected="false" aria-controls="options-container" tabindex="-1">Options</button>
+    </div>
+
+    <div id="target-page">
+        <div id="target-page-row" data-action-group>
+            <div id="target-page-location">
+                <strong id="target-page-label">Active Page:</strong>
+                <a id="target-page-url" target="_blank" rel="noopener noreferrer">Finding the current page…</a>
+            </div>
+            <div id="target-page-actions">
+                <button id="copy-target-page-url" type="button" aria-label="Copy full page URL" title="Copy full page URL" disabled><span class="copy-icon" aria-hidden="true"></span></button>
+                <button id="create-target-page-note" type="button" disabled>Create Note</button>
+            </div>
+            <span id="target-page-copy-feedback" role="status"></span>
+        </div>
+    </div>
+    <template id="panel-action-warning-template">
+        <div class="panel-action-warning" hidden>
+            <span role="alert"></span>
+            <button type="button" aria-label="Dismiss warning" title="Dismiss warning">&times;</button>
+        </div>
+    </template>
+
+    <div id="observatron-panel" role="tabpanel" aria-labelledby="observatron-tab" tabindex="0">
+    <div data-focused-panel="notes-panel" style="margin-bottom:10px">
         <div id="sessionDisplay">
             <strong>Session:</strong> <span id="sessionPath">observatron/YYYY/MM/DD/</span>
             <button id="editSessionName">Edit</button>
@@ -50,36 +184,94 @@
     </div>
 
     <div>
-        <button id="takeScreenshot">Take Screenshot</button>
-        <button id="savePage">Save Page</button>
-        <button id="checkBrokenLinks">Check Broken Links</button>
-        <button id="checkBrokenImages">Check Broken Images</button>
-        <button id="takeElementScreenshot">Take Element Screenshot</button>
-        <button id="addSelectedElement">Add Selected Element to Note</button>
+        <div class="panel-action-wrapper" data-focused-panel="tools-panel">
+            <button id="takeScreenshot">Take Screenshot</button>
+        </div>
+        <div class="panel-action-wrapper" data-focused-panel="tools-panel">
+            <button id="savePage">Save Page</button>
+        </div>
+        <div id="element-screenshot-actions" class="panel-action-wrapper" data-focused-panel="tools-panel">
+            <div data-action-group role="group" aria-labelledby="element-screenshot-caption">
+                <span id="element-screenshot-caption">Take Element Screenshot:</span>
+                <button id="takeActiveElementScreenshot" data-element-source="active" type="button" title="Click an element on the target page first" disabled>Active</button>
+                <button id="takeElementScreenshot" data-element-source="selected" type="button" title="Open DevTools for the target page and select an element in Elements" disabled>Selected in Dev Tools</button>
+            </div>
+            <details id="element-selector-screenshot">
+                <summary>By CSS Selector</summary>
+                <form data-action-group>
+                    <label for="element-screenshot-selector">CSS selector</label>
+                    <input id="element-screenshot-selector" type="text" placeholder="e.g. #search-button" required spellcheck="false">
+                    <button id="takeSelectorScreenshot" type="submit">Take Screenshot</button>
+                </form>
+            </details>
+        </div>
+    </div>
+    <div id="element-note-actions" data-focused-panel="notes-panel">
+        <div data-action-group role="group" aria-labelledby="element-note-caption">
+            <span id="element-note-caption">Add Element Note:</span>
+            <button id="addActiveElement" data-element-source="active" type="button" title="Click an element on the target page first" disabled>Active in page</button>
+            <button id="addSelectedElement" data-element-source="selected" type="button" title="Open DevTools for the target page and select an element in Elements" disabled>Selected in Dev Tools</button>
+        </div>
     </div>
 
-    <details id="accessibility-review">
-        <summary>Axe Accessibility Review</summary>
+    <details id="observatron-monitors">
+    <summary>Monitors -
+        <span data-monitor-summary="accessibility-review">Axe<span class="monitor-badge" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></span>,
+        <span data-monitor-summary="html-comments-review">HTML Comments<span class="monitor-badge" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></span>,
+        <span data-monitor-summary="broken-links-review">Links<span class="monitor-badge" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></span>,
+        <span data-monitor-summary="broken-images-review">Images<span class="monitor-badge" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></span>,
+        <span data-monitor-summary="traffic-monitor">Traffic<span class="monitor-badge" hidden></span></span>,
+        <span data-monitor-summary="network-errors-monitor">Network Errors<span class="monitor-badge" hidden></span></span>,
+        <span data-monitor-summary="console-monitor">Console<span class="monitor-badge" hidden></span></span>
+    </summary>
+    <div id="monitor-workspace" data-focused-panel="monitors-panel">
+    <div id="monitor-tabs" role="tablist" aria-label="Reviews and monitors">
+        <button id="axe-monitor-tab" type="button" role="tab" aria-selected="true" aria-controls="accessibility-review">Axe<span class="monitor-badge" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></button>
+        <button id="html-monitor-tab" type="button" role="tab" aria-selected="false" aria-controls="html-comments-review" tabindex="-1">HTML Comments<span class="monitor-badge" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></button>
+        <button id="links-monitor-tab" type="button" role="tab" aria-selected="false" aria-controls="broken-links-review" tabindex="-1">Links<span class="monitor-badge" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></button>
+        <button id="images-monitor-tab" type="button" role="tab" aria-selected="false" aria-controls="broken-images-review" tabindex="-1">Images<span class="monitor-badge" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></button>
+        <button id="traffic-monitor-tab" type="button" role="tab" aria-selected="false" aria-controls="traffic-monitor" tabindex="-1">Traffic<span class="monitor-badge" hidden></span></button>
+        <button id="network-errors-monitor-tab" type="button" role="tab" aria-selected="false" aria-controls="network-errors-monitor" tabindex="-1">Network Errors<span class="monitor-badge" hidden></span></button>
+        <button id="console-monitor-tab" type="button" role="tab" aria-selected="false" aria-controls="console-monitor" tabindex="-1">Console<span class="monitor-badge" hidden></span></button>
+    </div>
+
+    <section id="accessibility-review" role="tabpanel" aria-labelledby="axe-monitor-tab" tabindex="0">
+        <h2>Axe Accessibility Review<span id="accessibility-count" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></h2>
         <button id="checkAccessibility" type="button">Check Accessibility</button>
+        <button id="checkResponsiveAccessibility" type="button">Check Responsive Accessibility</button>
         <button id="clearAccessibility" type="button" disabled>Clear Results</button>
         <p id="accessibility-status" role="status"></p>
         <div id="accessibility-findings"></div>
-    </details>
+    </section>
 
-    <details id="html-comments-review">
-        <summary>HTML Comments Review</summary>
+    <section id="html-comments-review" role="tabpanel" aria-labelledby="html-monitor-tab" tabindex="0" hidden>
+        <h2>HTML Comments Review<span id="html-comments-count" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></h2>
         <button id="scan-html-comments" type="button">Scan For HTML Comments</button>
         <button id="clear-html-comments" type="button" disabled>Clear Results</button>
         <button id="export-html-comments" type="button" disabled>Save to Markdown</button>
         <p id="html-comments-status" role="status"></p>
         <ol id="html-comment-findings" aria-label="HTML comments"></ol>
-    </details>
+    </section>
 
-    <p id="traffic-monitor-sidebar-note"><span id="traffic-monitor-sidebar-title">Traffic Monitor (<span class="traffic-match-count">0 matches</span>)</span> is only available in the <strong>Test Observatron</strong> tab in DevTools.</p>
+    <section id="broken-links-review" role="tabpanel" aria-labelledby="links-monitor-tab" tabindex="0" data-resource-review="Link" hidden>
+        <h2>Broken Links Review<span class="resource-review-count" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></h2>
+        <button id="checkBrokenLinks" type="button">Check Broken Links</button>
+        <button type="button" data-clear-results disabled>Clear Results</button>
+        <p role="status"></p>
+        <ol aria-label="Broken links"></ol>
+    </section>
 
-    <details id="traffic-monitor" hidden>
-        <summary>Traffic Monitor (<span class="traffic-match-count">0 matches</span>)</summary>
-        <p>Search request and response text from this tab while DevTools is open, including traffic to other domains.</p>
+    <section id="broken-images-review" role="tabpanel" aria-labelledby="images-monitor-tab" tabindex="0" data-resource-review="Image" hidden>
+        <h2>Broken Images Review<span class="resource-review-count" hidden></span><span class="review-spinner" role="img" aria-label="Review in progress" hidden></span></h2>
+        <button id="checkBrokenImages" type="button">Check Broken Images</button>
+        <button type="button" data-clear-results disabled>Clear Results</button>
+        <p role="status"></p>
+        <ol aria-label="Broken images"></ol>
+    </section>
+
+    <section id="traffic-monitor" role="tabpanel" aria-labelledby="traffic-monitor-tab" tabindex="0" hidden>
+        <h2>Traffic Monitor (<span class="capture-count">0 matches</span>)</h2>
+        <p>Search this tab’s HTTP request and response text, including traffic to other domains.</p>
         <label for="traffic-rules">Session-only rules (one per line)</label>
         <details id="session-traffic-rule-syntax">
             <summary>Rule syntax</summary>
@@ -92,27 +284,58 @@
         </details>
         <textarea id="traffic-rules" aria-describedby="session-traffic-rule-syntax" rows="3" spellcheck="false" placeholder="Checkout email = qa+checkout@example.test"></textarea>
         <p><label><input id="include-saved-traffic-rules" type="checkbox" checked> Use saved rules from Options</label></p>
-        <button id="toggle-traffic-monitor" type="button">Start Monitoring</button>
+        <button id="toggle-traffic-monitor" type="button" disabled>Start Monitoring</button>
         <button id="clear-traffic-matches" type="button" disabled>Clear Matches</button>
         <p id="traffic-status" role="status"></p>
         <button id="save-selected-traffic-rules" type="button" disabled>Save Selected Rules to Options</button>
         <p id="traffic-save-status" role="status" hidden></p>
         <ul id="traffic-matches" aria-label="Traffic matches"></ul>
+    </section>
+
+    <section id="network-errors-monitor" role="tabpanel" aria-labelledby="network-errors-monitor-tab" tabindex="0" hidden>
+        <h2>Network Errors (<span class="capture-count">0 errors</span>)</h2>
+        <p>Collect HTTP 4xx and 5xx responses and failed network requests from this tab.</p>
+        <button id="toggle-network-errors-monitor" type="button" disabled>Start Monitoring</button>
+        <button id="clear-network-errors-results" type="button" disabled>Clear Results</button>
+        <p id="network-errors-status" role="status"></p>
+        <ul id="network-errors-results" aria-label="Network errors"></ul>
+    </section>
+
+    <section id="console-monitor" role="tabpanel" aria-labelledby="console-monitor-tab" tabindex="0" hidden>
+        <h2>Console Monitor (<span class="capture-count">0 entries</span>)</h2>
+        <p>Collect console messages and uncaught JavaScript errors from this tab.</p>
+        <button id="toggle-console-monitor" type="button" disabled>Start Monitoring</button>
+        <button id="clear-console-results" type="button" disabled>Clear Results</button>
+        <p id="console-status" role="status"></p>
+        <ul id="console-results" aria-label="Console messages and JavaScript errors"></ul>
+    </section>
+
+    <p><i>Background Processes: Links <span id="linkQueueLength">0</span> - Images <span id="imageQueueLength">0</span></i></p>
+    </div>
     </details>
 
-    <h2>Add Note to log</h2>
-    <p>Format: (? question, ! bug, - todo, @customtype)</p>
-    <textarea id="noteText" placeholder="Enter your note here..."></textarea>
-    <br>
-    <button id="saveNote">Save Note</button>
-    <button id="cancelNote">Cancel</button>
-     <br>
-     <label><input type="checkbox" id="withScreenshot"> Include screenshot</label>
-     <br>
-       <label><input type="checkbox" id="withElementScreenshot"> Include element screenshot</label>
+    <div data-focused-panel="notes-panel">
+        <h2>Add Note to log</h2>
+        <p>Format: (? question, ! bug, - todo, @customtype)</p>
+        <textarea id="noteText" placeholder="Enter your note here..."></textarea>
+        <br>
+        <div data-action-group>
+            <button id="saveNote">Save Note</button>
+            <button id="cancelNote">Cancel</button>
+        </div>
+        <label><input type="checkbox" id="withScreenshot"> Include screenshot</label>
+        <br>
+        <label><input type="checkbox" id="withElementScreenshot"> Include element screenshot</label>
+        <label id="note-screenshot-source-setting" hidden>
+            <span>Element to capture</span>
+            <select id="note-screenshot-source">
+                <option value="active">Active in page</option>
+                <option value="selected">Selected in Dev Tools</option>
+            </select>
+        </label>
+    </div>
 
-       <p><i>Background Processes: Links <span id="linkQueueLength">0</span> - Images <span id="imageQueueLength">0</span></i></p>
-
+    <div data-focused-panel="notes-panel">
        <h2>Notes Collection</h2>
       <details style="margin-bottom: 10px;">
           <summary>Save/Load/Clear Notes</summary>
@@ -148,13 +371,26 @@
           </div>
           <div id="notes-container"></div>
       </details>
+    </div>
+    </div>
+
+    <div id="notes-panel" role="tabpanel" aria-labelledby="notes-tab" tabindex="0" hidden></div>
+    <div id="tools-panel" role="tabpanel" aria-labelledby="tools-tab" tabindex="0" hidden></div>
+    <div id="monitors-panel" role="tabpanel" aria-labelledby="monitors-tab" tabindex="0" hidden></div>
+    <div id="options-container" role="tabpanel" aria-labelledby="options-tab" tabindex="0" data-save-on-leave hidden></div>
 
        <script src="../javascript/shared.js"></script>
+       <script src="../javascript/note_parser.js"></script>
+       <script src="../javascript/inspected_element.js"></script>
+       <script src="../javascript/capture_report.js"></script>
+       <script src="monitor-tabs.js"></script>
        <script src="sidepanel.js"></script>
+       <script src="../javascript/accessibility_scan.js"></script>
        <script src="accessibility.js"></script>
        <script src="html_comments.js"></script>
+       <script src="resource_review.js"></script>
        <script src="../javascript/traffic_rules.js"></script>
-       <script src="traffic_monitor.js"></script>
+       <script src="capture_monitors.js"></script>
      <script src="../javascript/observatron_options.js"></script>
      <script src="../options/options.js"></script>
 </body>

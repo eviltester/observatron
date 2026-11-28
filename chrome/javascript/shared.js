@@ -1,3 +1,7 @@
+const htmlCommentsReportKey = tabId => `observatron-html-comments:${tabId}`;
+const brokenAssetReportKey = (tabId, assetType) => `observatron-broken-${assetType.toLowerCase()}s:${tabId}`;
+const reviewNotesActivityKey = reportKey => `${reportKey}:notes`;
+
 async function saveCommentsAsMarkdown(comments, pageUrl) {
     if (comments.length === 0) {
         console.log('No HTML comments found on this page.');
